@@ -126,10 +126,6 @@ pub(crate) fn attr_bytes<'a>(el: Node<'a>, name: &CStr) -> Option<&'a [u8]> {
     attr(el, name).map(CStr::to_bytes)
 }
 
-pub(crate) fn named(node: Option<Node<'_>>, tag: &[u8]) -> bool {
-    node.and_then(Node::element_name) == Some(tag)
-}
-
 fn raw_name(el: Node<'_>) -> Option<&[u8]> {
     el.name().map(CStr::to_bytes)
 }
@@ -186,21 +182,21 @@ fn placeholder_shown(el: Node<'_>) -> bool {
 
 fn is_checked(el: Node<'_>) -> bool {
     let some = Some(el);
-    if named(some, b"option") {
+    if some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Option)) {
         if has(el, c"selected") {
             return true;
         }
         let mut select = el.parent();
-        if named(select, b"optgroup") {
+        if select.is_some_and(|node| node.is_tag(southstar_dom::Tag::Optgroup)) {
             select = select.and_then(Node::parent);
         }
         return select.is_some_and(|s| {
-            named(Some(s), b"select")
+            s.is_tag(southstar_dom::Tag::Select)
                 && !has(s, c"multiple")
                 && select::chosen_option(s) == Some(el)
         });
     }
-    if !named(some, b"input") {
+    if !some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Input)) {
         return false;
     }
     attr_bytes(el, c"type").is_some_and(|ty| eq(ty, b"checkbox") || eq(ty, b"radio"))
@@ -210,10 +206,11 @@ fn is_checked(el: Node<'_>) -> bool {
 fn is_submit_button(el: Node<'_>) -> bool {
     let some = Some(el);
     let ty = attr_bytes(el, c"type");
-    if named(some, b"input") {
+    if some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Input)) {
         return ty.is_some_and(|t| eq(t, b"submit") || eq(t, b"image"));
     }
-    named(some, b"button") && ty.is_none_or(|t| t.is_empty() || eq(t, b"submit") || eq(t, b"auto"))
+    some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Button))
+        && ty.is_none_or(|t| t.is_empty() || eq(t, b"submit") || eq(t, b"auto"))
 }
 
 fn first_submit_button_for<'a>(scan: Node<'a>, owner: Node<'a>, depth: i32) -> Option<Node<'a>> {
@@ -235,10 +232,10 @@ fn first_submit_button_for<'a>(scan: Node<'a>, owner: Node<'a>, depth: i32) -> O
 
 fn is_default(el: Node<'_>) -> bool {
     let some = Some(el);
-    if named(some, b"option") {
+    if some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Option)) {
         return has(el, c"selected");
     }
-    if named(some, b"input")
+    if some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Input))
         && attr_bytes(el, c"type").is_some_and(|t| eq(t, b"checkbox") || eq(t, b"radio"))
     {
         return has(el, c"checked");
@@ -261,7 +258,7 @@ fn radio_group_has_checked(
     if depth >= MAX_DEPTH {
         return false;
     }
-    if named(Some(scan), b"input")
+    if scan.is_tag(southstar_dom::Tag::Input)
         && attr_bytes(scan, c"type").is_some_and(|t| eq(t, b"radio"))
         && attr_bytes(scan, c"name").unwrap_or(b"") == name
         && controls::form_owner(scan) == owner
@@ -277,10 +274,12 @@ fn radio_group_has_checked(
 
 fn is_indeterminate(el: Node<'_>) -> bool {
     let some = Some(el);
-    if named(some, b"progress") {
+    if some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Progress)) {
         return !has(el, c"value");
     }
-    if !named(some, b"input") || !attr_bytes(el, c"type").is_some_and(|t| eq(t, b"radio")) {
+    if !some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Input))
+        || !attr_bytes(el, c"type").is_some_and(|t| eq(t, b"radio"))
+    {
         return false;
     }
     let name = attr_bytes(el, c"name").unwrap_or(b"");
@@ -288,7 +287,8 @@ fn is_indeterminate(el: Node<'_>) -> bool {
 }
 
 fn range_state(el: Node<'_>) -> Option<(bool, bool)> {
-    if !named(Some(el), b"input") || !controls::type_has_number_value(attr(el, c"type")) {
+    if !el.is_tag(southstar_dom::Tag::Input) || !controls::type_has_number_value(attr(el, c"type"))
+    {
         return None;
     }
     if !has(el, c"min") && !has(el, c"max") {
@@ -300,10 +300,11 @@ fn range_state(el: Node<'_>) -> Option<(bool, bool)> {
 
 fn is_blank(el: Node<'_>) -> bool {
     let some = Some(el);
-    if named(some, b"input") {
+    if some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Input)) {
         return input_is_text_entry(el) && attr_bytes(el, c"value").is_none_or(<[u8]>::is_empty);
     }
-    named(some, b"textarea") && all_ws(&serialize::collect_text(Some(el)))
+    some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Textarea))
+        && all_ws(&serialize::collect_text(Some(el)))
 }
 
 fn is_empty(el: Node<'_>) -> bool {
@@ -315,7 +316,7 @@ fn is_empty(el: Node<'_>) -> bool {
 }
 
 fn is_link(el: Node<'_>) -> bool {
-    has(el, c"href") && (named(Some(el), b"a") || named(Some(el), b"area"))
+    has(el, c"href") && (el.is_tag(southstar_dom::Tag::A) || el.is_tag(southstar_dom::Tag::Area))
 }
 
 fn is_visited_link(el: Node<'_>) -> bool {
@@ -717,7 +718,7 @@ fn heading_matches(el: Node<'_>, arg: Option<&[u8]>) -> bool {
 }
 
 fn is_media(el: Node<'_>) -> bool {
-    named(Some(el), b"video") || named(Some(el), b"audio")
+    el.is_tag(southstar_dom::Tag::Video) || el.is_tag(southstar_dom::Tag::Audio)
 }
 
 pub(crate) fn matches(el: Node<'_>, kind: u32, arg: Option<&[u8]>) -> bool {
@@ -749,7 +750,10 @@ pub(crate) fn matches(el: Node<'_>, kind: u32, arg: Option<&[u8]>) -> bool {
         PC_BLANK => is_blank(el),
         PC_LANG => lang_matches(el, arg),
         PC_DIR => arg == Some(node_dir(el).to_bytes()),
-        PC_OPEN => (named(Some(el), b"details") || named(Some(el), b"dialog")) && has(el, c"open"),
+        PC_OPEN => {
+            (el.is_tag(southstar_dom::Tag::Details) || el.is_tag(southstar_dom::Tag::Dialog))
+                && has(el, c"open")
+        }
         PC_POPOVER_OPEN => has(el, c"popover") && has(el, c"data-nd-popover-open"),
         PC_MODAL => has(el, c"data-nd-modal"),
         PC_HEADING => heading_matches(el, arg),

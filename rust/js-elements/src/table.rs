@@ -6,19 +6,17 @@
 use southstar_dom::children;
 use southstar_js_engine::{Scope, Value};
 
-use crate::{
-    Element, JsResult, descendants_named, ffi, first_descendant_named, named, named_ignore_case,
-    wrap_all,
-};
+use crate::{Element, JsResult, descendants_named, ffi, first_descendant_named, named, wrap_all};
 
 fn reflects_rows(node: Option<Element>) -> bool {
-    named(node, b"textarea") || named(node, b"frameset")
+    node.is_some_and(|node| node.is_tag(southstar_dom::Tag::Textarea))
+        || node.is_some_and(|node| node.is_tag(southstar_dom::Tag::Frameset))
 }
 
 fn section_rows(table: Element, section: &'static [u8]) -> impl Iterator<Item = Element> {
     children(table)
         .filter(move |&c| named(Some(c), section))
-        .flat_map(|c| children(c).filter(|&r| named(Some(r), b"tr")))
+        .flat_map(|c| children(c).filter(|&r| r.is_tag(southstar_dom::Tag::Tr)))
 }
 
 pub fn rows(scope: &mut Scope<'_>, this: &Value) -> JsResult {
@@ -30,9 +28,10 @@ pub fn rows(scope: &mut Scope<'_>, this: &Value) -> JsResult {
         return Ok(scope.new_array());
     };
     let body_rows = children(table).flat_map(|c| {
-        let direct = named(Some(c), b"tr").then_some(c);
-        let in_body = named(Some(c), b"tbody")
-            .then(|| children(c).filter(|&r| named(Some(r), b"tr")))
+        let direct = c.is_tag(southstar_dom::Tag::Tr).then_some(c);
+        let in_body = c
+            .is_tag(southstar_dom::Tag::Tbody)
+            .then(|| children(c).filter(|&r| r.is_tag(southstar_dom::Tag::Tr)))
             .into_iter()
             .flatten();
         direct.into_iter().chain(in_body)
@@ -73,7 +72,10 @@ pub fn tfoot(scope: &mut Scope<'_>, this: &Value) -> JsResult {
 
 pub fn tbodies(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     match ffi::unwrap_node(this) {
-        Some(table) => wrap_all(scope, children(table).filter(|&c| named(Some(c), b"tbody"))),
+        Some(table) => wrap_all(
+            scope,
+            children(table).filter(|&c| c.is_tag(southstar_dom::Tag::Tbody)),
+        ),
         None => Ok(scope.new_array()),
     }
 }
@@ -82,7 +84,8 @@ pub fn cells(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     match ffi::unwrap_node(this) {
         Some(row) => wrap_all(
             scope,
-            children(row).filter(|&c| named(Some(c), b"td") || named(Some(c), b"th")),
+            children(row)
+                .filter(|&c| c.is_tag(southstar_dom::Tag::Td) || c.is_tag(southstar_dom::Tag::Th)),
         ),
         None => Ok(scope.new_array()),
     }
@@ -218,8 +221,11 @@ fn row_parent(table: Element, rows: &[Element]) -> Element {
     if let Some(parent) = rows.last().and_then(|row| row.parent()) {
         return parent;
     }
-    if rows.is_empty() && named(Some(table), b"table") {
-        if let Some(body) = children(table).filter(|&c| named(Some(c), b"tbody")).last() {
+    if rows.is_empty() && table.is_tag(southstar_dom::Tag::Table) {
+        if let Some(body) = children(table)
+            .filter(|&c| c.is_tag(southstar_dom::Tag::Tbody))
+            .last()
+        {
             return body;
         }
         let body = new_element(b"tbody");
@@ -262,7 +268,10 @@ pub fn delete_row(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResu
 
 fn row_cells(row: Element) -> Vec<Element> {
     children(row)
-        .filter(|&c| named_ignore_case(c, b"td") || named_ignore_case(c, b"th"))
+        .filter(|&c| {
+            c.is_tag_ignore_case(southstar_dom::Tag::Td)
+                || c.is_tag_ignore_case(southstar_dom::Tag::Th)
+        })
         .collect()
 }
 

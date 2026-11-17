@@ -49,10 +49,6 @@ const LISTED: [&str; 7] = [
 ];
 const SHADOW_ATTR: &CStr = c"data-nd-shadow-root";
 
-pub(crate) fn named(node: Element, tag: &str) -> bool {
-    node.element_name() == Some(tag.as_bytes())
-}
-
 pub(crate) fn name_is(node: Element, tag: &str) -> bool {
     node.element_name()
         .is_some_and(|name| name.eq_ignore_ascii_case(tag.as_bytes()))
@@ -84,7 +80,7 @@ pub(crate) fn form_owner(control: Element) -> Option<Element> {
 }
 
 fn is_image_input(node: Element) -> bool {
-    name_is(node, "input") && text_is(type_of(node), "image")
+    node.is_tag_ignore_case(southstar_dom::Tag::Input) && text_is(type_of(node), "image")
 }
 
 fn collect_listed(
@@ -155,10 +151,10 @@ pub(crate) fn type_is(node: Element, wanted: &str) -> bool {
 
 pub(crate) fn parent_select(option: Element) -> Option<Element> {
     let mut parent = option.parent()?;
-    if named(parent, "optgroup") {
+    if parent.is_tag(southstar_dom::Tag::Optgroup) {
         parent = parent.parent()?;
     }
-    named(parent, "select").then_some(parent)
+    parent.is_tag(southstar_dom::Tag::Select).then_some(parent)
 }
 
 pub fn install_runtime_hooks() {

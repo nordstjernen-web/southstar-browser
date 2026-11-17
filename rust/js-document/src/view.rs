@@ -7,7 +7,7 @@ use southstar_dom::Kind;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
-use crate::{Element, JsResult, element_named};
+use crate::{Element, JsResult};
 
 fn page_window(scope: &mut Scope<'_>, js: Js) -> Value {
     if !js.is_null()
@@ -20,9 +20,9 @@ fn page_window(scope: &mut Scope<'_>, js: Js) -> Value {
 
 fn is_frame_element(node: Element) -> bool {
     node.is_element()
-        && (element_named(node, "iframe")
-            || element_named(node, "frame")
-            || element_named(node, "object"))
+        && (node.is_tag(southstar_dom::Tag::Iframe)
+            || node.is_tag(southstar_dom::Tag::Frame)
+            || node.is_tag(southstar_dom::Tag::Object))
 }
 
 pub fn default_view(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {

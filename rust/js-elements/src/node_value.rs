@@ -16,13 +16,8 @@ fn is_character_data(node: Element) -> bool {
     matches!(node.kind(), Kind::Text | Kind::Comment)
 }
 
-fn name_ignore_case(node: Element, tag: &[u8]) -> bool {
-    node.name()
-        .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(tag))
-}
-
 fn is_object_element(node: Option<Element>) -> bool {
-    node.is_some_and(|n| n.is_element() && name_ignore_case(n, b"object"))
+    node.is_some_and(|n| n.is_element() && n.name_is_tag_ignore_case(southstar_dom::Tag::Object))
 }
 
 fn utf8_sequence_length(lead: u8) -> usize {
@@ -55,10 +50,10 @@ pub fn text_length(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     if is_character_data(node) {
         return Ok(Value::int(node.text().map_or(0, utf16_length)));
     }
-    if name_ignore_case(node, b"select") {
+    if node.name_is_tag_ignore_case(southstar_dom::Tag::Select) {
         return crate::element::select_length(scope, this);
     }
-    if name_ignore_case(node, b"form") {
+    if node.name_is_tag_ignore_case(southstar_dom::Tag::Form) {
         let controls = ffi::form_controls_snapshot(scope, this)?;
         return scope.get(&controls, "length");
     }

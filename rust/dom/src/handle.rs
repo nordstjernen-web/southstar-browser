@@ -168,6 +168,25 @@ impl<'a> Node<'a> {
         self.is_tag(tag) && self.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0
     }
 
+    pub fn is_tag_ignore_case(self, tag: Tag) -> bool {
+        self.is_element() && self.name_is_tag_ignore_case(tag)
+    }
+
+    pub fn name_is_tag(self, tag: Tag) -> bool {
+        tag != Tag::Other && self.slot.tag.get() == tag
+    }
+
+    pub fn name_is_tag_ignore_case(self, tag: Tag) -> bool {
+        if self.name_is_tag(tag) {
+            return true;
+        }
+        self.slot.tag.get() == Tag::Other
+            && tag.name().is_some_and(|wanted| {
+                self.name()
+                    .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(wanted.to_bytes()))
+            })
+    }
+
     pub fn text(self) -> Option<&'a CStr> {
         self.slot.text().map(NulString::c_str)
     }

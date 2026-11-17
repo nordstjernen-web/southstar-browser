@@ -66,10 +66,6 @@ pub(crate) fn hidden_child(node: Element) -> bool {
     is_embedded_doc(node) || is_shadow_root(node)
 }
 
-pub(crate) fn is_named(node: Element, tag: &[u8]) -> bool {
-    node.element_name() == Some(tag)
-}
-
 pub(crate) fn is_template(node: Element) -> bool {
     node.is_html_tag(southstar_dom::Tag::Template)
 }

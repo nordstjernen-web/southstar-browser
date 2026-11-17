@@ -42,7 +42,3 @@ pub(crate) fn document_for(scope: &Scope<'_>, this: &Value) -> Option<Element> {
     }
     ffi::current_document(ffi::js_of(scope))
 }
-
-pub(crate) fn element_named(node: Node<'_>, tag: &str) -> bool {
-    node.element_name() == Some(tag.as_bytes())
-}

@@ -196,10 +196,6 @@ pub(crate) fn live(n: Option<WeakNode>) -> Option<Node<'static>> {
     n.and_then(WeakNode::get)
 }
 
-fn is_named(n: Node<'_>, tag: &CStr) -> bool {
-    n.element_name() == Some(tag.to_bytes())
-}
-
 fn attr<'a>(n: Node<'a>, name: &CStr) -> Option<&'a CStr> {
     n.attr(name)
 }
@@ -909,7 +905,7 @@ pub(crate) fn purge_subtree_rafs(js: Option<Page>, root: Node<'_>) {
     }
     let mut n = Some(root);
     while let Some(current) = n {
-        if is_named(current, c"iframe") || is_named(current, c"frame") {
+        if current.is_tag(southstar_dom::Tag::Iframe) || current.is_tag(southstar_dom::Tag::Frame) {
             (crate::api::lifecycle_hooks().purge_frame_rafs)(js, current);
             (crate::api::services_hooks().purge_frame_timers)(js, current);
             (crate::api::frames_hooks().scrub_globals)(js, current);
@@ -1024,7 +1020,11 @@ pub(crate) fn frame_url(js: super::Js, frame: Option<Node<'_>>) -> Option<CStrin
 
 pub(crate) fn node_frame_url<'a>(el: Node<'a>) -> Option<&'a CStr> {
     southstar_dom::ancestors(el)
-        .filter(|&p| is_named(p, c"iframe") || is_named(p, c"frame") || is_named(p, c"object"))
+        .filter(|&p| {
+            p.is_tag(southstar_dom::Tag::Iframe)
+                || p.is_tag(southstar_dom::Tag::Frame)
+                || p.is_tag(southstar_dom::Tag::Object)
+        })
         .find_map(|p| attr(p, c"data-nd-frame-url").filter(|url| !url.is_empty()))
 }
 
@@ -1162,7 +1162,7 @@ pub(crate) fn ce_attr_changed(
         (crate::api::top_layer_hooks().popover_attr_changed)(js, el, attr_name, old, new);
     }
     let is_plain_script =
-        is_named(el, c"script") && el.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0;
+        el.is_tag(southstar_dom::Tag::Script) && el.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0;
     if js.is_some()
         && attr_bytes.eq_ignore_ascii_case(b"src")
         && old.is_none()

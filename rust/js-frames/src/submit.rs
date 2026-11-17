@@ -14,10 +14,6 @@ use crate::{sandbox, schedule};
 
 const MAX_DEPTH: usize = 512;
 
-fn named(node: Node<'_>, tag: &[u8]) -> bool {
-    node.element_name() == Some(tag)
-}
-
 fn non_empty(text: Option<&CStr>) -> Option<&CStr> {
     text.filter(|text| !text.is_empty())
 }
@@ -25,8 +21,8 @@ fn non_empty(text: Option<&CStr>) -> Option<&CStr> {
 fn is_submit_button(node: Node<'_>) -> bool {
     let kind = node.attr(c"type").map(CStr::to_bytes);
     let kind_is = |name: &[u8]| kind.is_some_and(|kind| kind.eq_ignore_ascii_case(name));
-    (named(node, b"button") && (kind.is_none() || kind_is(b"submit")))
-        || (named(node, b"input") && (kind_is(b"submit") || kind_is(b"image")))
+    (node.is_tag(southstar_dom::Tag::Button) && (kind.is_none() || kind_is(b"submit")))
+        || (node.is_tag(southstar_dom::Tag::Input) && (kind_is(b"submit") || kind_is(b"image")))
 }
 
 fn document_of(node: Node<'_>) -> Option<Node<'_>> {
@@ -40,8 +36,9 @@ fn top_document(node: Node<'_>) -> Option<Node<'_>> {
 }
 
 fn frame_holding(doc: Node<'_>) -> Option<Node<'_>> {
-    doc.parent()
-        .filter(|owner| named(*owner, b"iframe") || named(*owner, b"frame"))
+    doc.parent().filter(|owner| {
+        (*owner).is_tag(southstar_dom::Tag::Iframe) || (*owner).is_tag(southstar_dom::Tag::Frame)
+    })
 }
 
 fn first_in_document<'a>(
@@ -71,7 +68,7 @@ fn frame_named<'a>(node: Node<'a>, name: &[u8], depth: usize) -> Option<Node<'a>
         return None;
     }
     for child in children(node) {
-        if (named(child, b"iframe") || named(child, b"frame"))
+        if (child.is_tag(southstar_dom::Tag::Iframe) || child.is_tag(southstar_dom::Tag::Frame))
             && child.attr(c"name").map(CStr::to_bytes) == Some(name)
         {
             return Some(child);
@@ -89,7 +86,7 @@ fn target_name<'a>(form: Node<'a>, button: Option<Node<'a>>, doc: Node<'a>) -> &
         .or_else(|| form.attr(c"target"))
         .or_else(|| {
             first_in_document(doc, 0, &|node| {
-                named(node, b"base") && node.attr(c"target").is_some()
+                node.is_tag(southstar_dom::Tag::Base) && node.attr(c"target").is_some()
             })
             .and_then(|base| base.attr(c"target"))
         });

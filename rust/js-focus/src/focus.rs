@@ -12,7 +12,7 @@ use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
 use crate::{
-    Element, Guard, JsResult, attr_is, has_attr, in_template_content, inclusive_ancestor, is_named,
+    Element, Guard, JsResult, attr_is, has_attr, in_template_content, inclusive_ancestor,
     owner_document, top_document,
 };
 
@@ -79,10 +79,10 @@ pub(crate) fn is_focusable(el: Element) -> bool {
 }
 
 fn accepts_text_entry(el: Element) -> bool {
-    if is_named(Some(el), b"textarea") {
+    if el.is_tag(southstar_dom::Tag::Textarea) {
         return true;
     }
-    if is_named(Some(el), b"input") {
+    if el.is_tag(southstar_dom::Tag::Input) {
         const NON_TEXT: [&[u8]; 10] = [
             b"button",
             b"checkbox",

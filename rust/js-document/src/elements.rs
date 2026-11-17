@@ -5,18 +5,14 @@
 
 use std::collections::VecDeque;
 
-use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH};
+use southstar_dom::{Kind, MAX_DEPTH};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
-use crate::{Element, FLAG_QUIRKS, JsResult, document_for, element_named};
+use crate::{Element, FLAG_QUIRKS, JsResult, document_for};
 
 const HIERARCHY_REQUEST_ERR: i32 = 3;
 const SHADOW_ATTR: &core::ffi::CStr = c"data-nd-shadow-root";
-
-fn html_element_named(node: Element, tag: &str) -> bool {
-    element_named(node, tag) && node.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0
-}
 
 fn is_shadow_root(node: Element) -> bool {
     node.is_element() && node.attr(SHADOW_ATTR).is_some()
@@ -39,9 +35,10 @@ fn root_node(scope: &Scope<'_>, this: &Value) -> Option<Element> {
 }
 
 fn body_node(scope: &Scope<'_>, this: &Value) -> Option<Element> {
-    let root = root_node(scope, this).filter(|r| html_element_named(*r, "html"))?;
-    southstar_dom::children(root)
-        .find(|c| html_element_named(*c, "body") || html_element_named(*c, "frameset"))
+    let root = root_node(scope, this).filter(|r| (*r).is_html_tag(southstar_dom::Tag::Html))?;
+    southstar_dom::children(root).find(|c| {
+        (*c).is_html_tag(southstar_dom::Tag::Body) || (*c).is_html_tag(southstar_dom::Tag::Frameset)
+    })
 }
 
 pub fn get_document_element(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
@@ -86,7 +83,9 @@ pub fn set_body(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult
     let Some(new_body) = ffi::unwrap_node(value) else {
         return Err(scope.type_error("Document.body must be an Element"));
     };
-    if !html_element_named(new_body, "body") && !html_element_named(new_body, "frameset") {
+    if !new_body.is_html_tag(southstar_dom::Tag::Body)
+        && !new_body.is_html_tag(southstar_dom::Tag::Frameset)
+    {
         return Err(hierarchy_error(
             scope,
             "Document.body must be body or frameset",
@@ -285,7 +284,9 @@ pub fn get_anchors(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult
     let Some(doc) = document_for(scope, this) else {
         return Ok(scope.new_array());
     };
-    let anchors = breadth_first(doc, |c| element_named(c, "a") && c.attr(c"name").is_some());
+    let anchors = breadth_first(doc, |c| {
+        c.is_tag(southstar_dom::Tag::A) && c.attr(c"name").is_some()
+    });
     node_array(scope, anchors)
 }
 

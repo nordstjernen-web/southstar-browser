@@ -12,8 +12,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 use crate::ffi::{self, Page, cstring};
 use crate::submit::is_submit_trigger;
 use crate::{
-    Element, JsResult, MAX_DEPTH, c_bytes, form_owner, hidden_child, named, text_is, text_is_any,
-    type_of,
+    Element, JsResult, MAX_DEPTH, c_bytes, form_owner, hidden_child, text_is, text_is_any, type_of,
 };
 
 const CUSTOM_VALIDITY_ATTR: &CStr = c"data-nd-custom-validity";
@@ -61,7 +60,7 @@ fn value_matches_pattern(value: &[u8], pattern: Option<&[u8]>) -> bool {
 }
 
 fn is_radio(node: Element) -> bool {
-    named(node, "input") && text_is(type_of(node), "radio")
+    node.is_tag(southstar_dom::Tag::Input) && text_is(type_of(node), "radio")
 }
 
 fn radio_group_has_required(
@@ -255,7 +254,7 @@ pub(crate) fn will_validate(node: Option<Element>) -> bool {
     if is_input && node.attr(c"readonly").is_some() {
         return false;
     }
-    if ancestors(node).any(|p| named(p, "datalist")) {
+    if ancestors(node).any(|p| p.is_tag(southstar_dom::Tag::Datalist)) {
         return false;
     }
     let ty = if is_input { type_of(node) } else { None };
@@ -362,7 +361,7 @@ pub(crate) fn update_validity_state(
 pub fn check_validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let node = ffi::element(this);
     let page = Page::of(scope);
-    if let Some(form) = node.filter(|n| named(*n, "form")) {
+    if let Some(form) = node.filter(|n| (*n).is_tag(southstar_dom::Tag::Form)) {
         let mut bad = Vec::new();
         collect_invalid(form, form.root(), 0, &mut bad);
         if let Some(page) = page {
@@ -381,7 +380,7 @@ pub fn check_validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> J
 
 fn message(node: Element) -> &'static str {
     let flags = compute(Some(node));
-    let ty = if named(node, "input") {
+    let ty = if node.is_tag(southstar_dom::Tag::Input) {
         type_of(node)
     } else {
         None
@@ -391,7 +390,7 @@ fn message(node: Element) -> &'static str {
             "Please check this box."
         } else if text_is(ty, "radio") {
             "Please select one of these options."
-        } else if named(node, "select") {
+        } else if node.is_tag(southstar_dom::Tag::Select) {
             "Please select an item in the list."
         } else {
             "Please fill out this field."

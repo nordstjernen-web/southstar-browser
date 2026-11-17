@@ -10,7 +10,7 @@ use southstar_dom::{children, controls, select};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, Page};
-use crate::{Element, JsResult, checkable, name_is, named, parent_select};
+use crate::{Element, JsResult, checkable, parent_select};
 
 const HIDDEN: Attributes = Attributes {
     writable: false,
@@ -21,10 +21,10 @@ const HIDDEN: Attributes = Attributes {
 pub(crate) fn options(select: Element) -> Vec<Element> {
     let mut out = Vec::new();
     for child in children(select) {
-        if named(child, "option") {
+        if child.is_tag(southstar_dom::Tag::Option) {
             out.push(child);
-        } else if named(child, "optgroup") {
-            out.extend(children(child).filter(|o| named(*o, "option")));
+        } else if child.is_tag(southstar_dom::Tag::Optgroup) {
+            out.extend(children(child).filter(|o| (*o).is_tag(southstar_dom::Tag::Option)));
         }
     }
     out
@@ -33,10 +33,12 @@ pub(crate) fn options(select: Element) -> Vec<Element> {
 fn options_ignoring_case(select: Element) -> Vec<Element> {
     let mut out = Vec::new();
     for child in children(select) {
-        if name_is(child, "option") {
+        if child.is_tag_ignore_case(southstar_dom::Tag::Option) {
             out.push(child);
-        } else if name_is(child, "optgroup") {
-            out.extend(children(child).filter(|o| name_is(*o, "option")));
+        } else if child.is_tag_ignore_case(southstar_dom::Tag::Optgroup) {
+            out.extend(
+                children(child).filter(|o| (*o).is_tag_ignore_case(southstar_dom::Tag::Option)),
+            );
         }
     }
     out
@@ -83,7 +85,7 @@ pub fn selected(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if n.attr(c"selected").is_some() {
         return Ok(Value::boolean(true));
     }
-    if !named(n, "option") {
+    if !n.is_tag(southstar_dom::Tag::Option) {
         return Ok(Value::boolean(false));
     }
     let chosen = parent_select(n)
@@ -97,7 +99,7 @@ pub fn set_selected(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     };
     let page = Page::of(scope);
     let on = args.first().is_some_and(|v| scope.to_bool(v));
-    let is_option = named(n, "option");
+    let is_option = n.is_tag(southstar_dom::Tag::Option);
     let owner = if is_option { parent_select(n) } else { None };
     if let Some(sel) = owner {
         ffi::remove_attr(sel, c"data-nd-noselect");
@@ -124,7 +126,7 @@ pub fn set_default_selected(scope: &mut Scope<'_>, this: &Value, args: &[Value])
 }
 
 fn selected_index_of(el: Option<Element>) -> i32 {
-    let Some(sel) = el.filter(|e| named(*e, "select")) else {
+    let Some(sel) = el.filter(|e| (*e).is_tag(southstar_dom::Tag::Select)) else {
         return -1;
     };
     let Some(chosen) = select::chosen_option(sel) else {
@@ -141,7 +143,7 @@ pub fn selected_index(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult 
 }
 
 pub fn set_selected_index(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
-    let Some(sel) = ffi::element(this).filter(|e| named(*e, "select")) else {
+    let Some(sel) = ffi::element(this).filter(|e| (*e).is_tag(southstar_dom::Tag::Select)) else {
         return Ok(Value::undefined());
     };
     let wanted = args.first().map_or(-1, |v| scope.to_int32(v).unwrap_or(0));
@@ -185,7 +187,7 @@ fn option_array(scope: &mut Scope<'_>, items: &[Element]) -> JsResult {
 pub fn options_getter(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let el = ffi::element(this);
     let items = el
-        .filter(|e| named(*e, "select"))
+        .filter(|e| (*e).is_tag(southstar_dom::Tag::Select))
         .map(options)
         .unwrap_or_default();
     let array = option_array(scope, &items)?;
@@ -210,7 +212,7 @@ pub fn options_getter(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsRes
 }
 
 pub fn selected_options(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
-    let items = match ffi::element(this).filter(|e| named(*e, "select")) {
+    let items = match ffi::element(this).filter(|e| (*e).is_tag(southstar_dom::Tag::Select)) {
         Some(sel) if sel.attr(c"multiple").is_none() => {
             select::chosen_option(sel).into_iter().collect()
         }
@@ -251,7 +253,7 @@ pub fn named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResu
     let mut queue = VecDeque::from([el]);
     while let Some(n) = queue.pop_front() {
         for child in children(n).filter(|c| c.element_name().is_some()) {
-            if name_is(child, "option") {
+            if child.is_tag_ignore_case(southstar_dom::Tag::Option) {
                 if matches(child, c"id") || matches(child, c"name") {
                     return Ok(ffi::wrap(scope, Some(child)));
                 }
@@ -271,9 +273,11 @@ pub fn add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let before = match args.get(1) {
         Some(b) if !b.is_null() && !b.is_undefined() && b.is_number() => {
             let index = scope.to_int32(b).unwrap_or(0);
-            usize::try_from(index)
-                .ok()
-                .and_then(|i| children(sel).filter(|c| name_is(*c, "option")).nth(i))
+            usize::try_from(index).ok().and_then(|i| {
+                children(sel)
+                    .filter(|c| (*c).is_tag_ignore_case(southstar_dom::Tag::Option))
+                    .nth(i)
+            })
         }
         Some(b) if !b.is_null() && !b.is_undefined() => ffi::element(b),
         _ => None,
@@ -334,7 +338,7 @@ fn current_index(sel: Element, opts: &[Element]) -> Option<usize> {
 }
 
 pub(crate) fn step(page: Page, sel: Element, dir: i32) -> bool {
-    if !named(sel, "select") {
+    if !sel.is_tag(southstar_dom::Tag::Select) {
         return false;
     }
     let opts = options(sel);
@@ -361,7 +365,7 @@ pub(crate) fn step(page: Page, sel: Element, dir: i32) -> bool {
 }
 
 pub(crate) fn edge(page: Page, sel: Element, last: bool) -> bool {
-    if !named(sel, "select") {
+    if !sel.is_tag(southstar_dom::Tag::Select) {
         return false;
     }
     let opts = options(sel);
@@ -376,7 +380,7 @@ pub(crate) fn edge(page: Page, sel: Element, last: bool) -> bool {
 }
 
 pub(crate) fn typeahead(page: Page, sel: Element, key: &[u8]) -> bool {
-    if key.is_empty() || !named(sel, "select") {
+    if key.is_empty() || !sel.is_tag(southstar_dom::Tag::Select) {
         return false;
     }
     let opts = options(sel);

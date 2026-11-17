@@ -47,20 +47,18 @@ fn run_early_injected(js: Js) {
     }
 }
 
-fn is_named(node: Option<Element>, tag: &[u8]) -> bool {
-    node.is_some_and(|node| node.element_name() == Some(tag))
-}
-
 fn track_document_images(js: Js, node: Element, depth: i32) {
     if depth >= MAX_DEPTH || (depth > 0 && ffi::hidden_child(node)) {
         return;
     }
-    if is_named(Some(node), b"img") {
+    if node.is_tag(southstar_dom::Tag::Img) {
         let loading = node.attr(c"loading");
         if let Some(src) = node.attr(c"src").filter(|src| !src.is_empty())
             && node.attr(c"srcset").is_none()
             && !loading.is_some_and(|l| l.to_bytes().eq_ignore_ascii_case(b"lazy"))
-            && !is_named(node.parent(), b"picture")
+            && !node
+                .parent()
+                .is_some_and(|node| node.is_tag(southstar_dom::Tag::Picture))
             && !js.image_load_tracked(node)
             && node.flags() & IMG_LOAD_FIRED == 0
         {

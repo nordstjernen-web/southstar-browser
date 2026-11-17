@@ -150,10 +150,6 @@ fn label_target<'a>(fc: &'a Ctx, label: Node<'a>) -> Option<Node<'a>> {
     None
 }
 
-fn element_named(n: Node, name: &[u8]) -> bool {
-    n.is_element() && n.name().is_some_and(|nm| nm.to_bytes() == name)
-}
-
 fn is_password(n: Node) -> bool {
     ffi::is_named(n, c"input")
         && n.attr(c"type")
@@ -303,7 +299,7 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
         return;
     }
     for cur in ancestors_and_self(dom) {
-        if element_named(cur, b"summary")
+        if cur.is_tag(southstar_dom::Tag::Summary)
             && let Some(details) = cur.parent().filter(|p| ffi::is_named(*p, c"details"))
         {
             let now_open = details.attr(c"open").is_none();
@@ -318,7 +314,7 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
             }
             return;
         }
-        if element_named(cur, b"input") {
+        if cur.is_tag(southstar_dom::Tag::Input) {
             let kind = cur.attr(c"type").map(CStr::to_bytes);
             let checked: &CStr = match kind {
                 Some(k) if k.eq_ignore_ascii_case(b"checkbox") => {
@@ -512,7 +508,7 @@ fn key(fc: &Ctx, nav: &NavCapture, name: &[u8]) {
     let (caret, anchor) = (fc.caret.get(), fc.anchor.get());
     let (lo, hi) = (caret.min(anchor), caret.max(anchor));
     let has_sel = lo != hi;
-    let multiline = element_named(t, b"textarea") || ffi::is_contenteditable_host(t);
+    let multiline = t.is_tag(southstar_dom::Tag::Textarea) || ffi::is_contenteditable_host(t);
     let is = |k: &[u8]| name.eq_ignore_ascii_case(k);
     if is(b"Tab") {
         let (Some(js), false) = (fc.js, key_prevented) else {
@@ -534,7 +530,7 @@ fn key(fc: &Ctx, nav: &NavCapture, name: &[u8]) {
     if is(b"Enter") || is(b"Return") {
         if multiline {
             edit_replace(fc, lo, hi, Some(b"\n"));
-        } else if !key_prevented && element_named(t, b"input") {
+        } else if !key_prevented && t.is_tag(southstar_dom::Tag::Input) {
             submit_form_from(fc, nav, t);
         }
         return;
@@ -585,7 +581,7 @@ fn key(fc: &Ctx, nav: &NavCapture, name: &[u8]) {
 }
 
 fn step_number(fc: &Ctx, t: Node, cur: &[u8], up: bool) {
-    let is_number = element_named(t, b"input")
+    let is_number = t.is_tag(southstar_dom::Tag::Input)
         && t.attr(c"type")
             .is_some_and(|k| k.to_bytes().eq_ignore_ascii_case(b"number"));
     if !is_number {

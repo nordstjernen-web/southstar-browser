@@ -49,10 +49,6 @@ pub(crate) fn name_is(node: Node<'_>, tag: &str) -> bool {
         .is_some_and(|name| name.to_bytes() == tag.as_bytes())
 }
 
-pub(crate) fn element_named(node: Node<'_>, tag: &str) -> bool {
-    node.element_name() == Some(tag.as_bytes())
-}
-
 pub(crate) fn cmin(a: f64, b: f64) -> f64 {
     if a < b { a } else { b }
 }

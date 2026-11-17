@@ -65,8 +65,9 @@ pub fn attr_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
         return Ok(Value::undefined());
     }
     let v = ffi::attr(n, name);
-    let defaults_to_document = (index == tables::ACTION && is_named(n, b"form"))
-        || (index == tables::FORM_ACTION && (is_named(n, b"button") || is_named(n, b"input")));
+    let defaults_to_document = (index == tables::ACTION && n.is_tag(southstar_dom::Tag::Form))
+        || (index == tables::FORM_ACTION
+            && (n.is_tag(southstar_dom::Tag::Button) || n.is_tag(southstar_dom::Tag::Input)));
     let js = ffi::js_of(scope);
     if defaults_to_document && v.is_none_or(|v| v.first().is_none_or(|&b| b == 0)) {
         return text(scope, &ffi::current_url(js));
@@ -391,10 +392,10 @@ pub fn html_for_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(n) = ffi::unwrap_node(this).filter(|n| n.flags() & foreign == 0) else {
         return Ok(Value::undefined());
     };
-    if is_named(n, b"output") {
+    if n.is_tag(southstar_dom::Tag::Output) {
         return ffi::token_list(scope, this, c"for");
     }
-    if !is_named(n, b"label") && !is_named(n, b"script") {
+    if !n.is_tag(southstar_dom::Tag::Label) && !n.is_tag(southstar_dom::Tag::Script) {
         return Ok(Value::undefined());
     }
     Ok(reflect_get(scope, this, c"for", false))

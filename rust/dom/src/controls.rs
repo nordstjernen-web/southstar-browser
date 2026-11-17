@@ -45,14 +45,6 @@ fn empty_or_missing(ty: Option<&CStr>) -> bool {
     ty.is_none_or(CStr::is_empty)
 }
 
-fn named(node: Node, name: &[u8]) -> bool {
-    node.element_name() == Some(name)
-}
-
-fn raw_name_is(node: Node, name: &[u8]) -> bool {
-    node.name().is_some_and(|n| n.to_bytes() == name)
-}
-
 fn c_trunc_long(d: f64) -> c_long {
     let (low, high) = if cfg!(windows) {
         (-2_147_483_649.0, 2_147_483_648.0)
@@ -293,7 +285,7 @@ pub fn value_to_number(ty: Option<&CStr>, value: Option<&CStr>) -> Option<f64> {
 }
 
 pub fn value_range_state(input: Node, value: Option<&CStr>) -> Option<(bool, bool)> {
-    if !named(input, b"input") {
+    if !input.is_tag(crate::Tag::Input) {
         return None;
     }
     let ty = input.attr(c"type");
@@ -475,7 +467,7 @@ fn range_value(input: Node, value: Option<&CStr>) -> f64 {
 }
 
 pub fn step_apply(input: Node, sign: c_int, n: f64, buffer_len: usize) -> Step {
-    if !named(input, b"input") {
+    if !input.is_tag(crate::Tag::Input) {
         return Step::NotApplicable;
     }
     let ty = input.attr(c"type");
@@ -536,7 +528,7 @@ pub fn step_apply(input: Node, sign: c_int, n: f64, buffer_len: usize) -> Step {
 }
 
 pub fn value_step_mismatch(input: Node, value: Option<&CStr>) -> bool {
-    if !named(input, b"input") {
+    if !input.is_tag(crate::Tag::Input) {
         return false;
     }
     let ty = input.attr(c"type");
@@ -563,7 +555,7 @@ pub fn value_step_mismatch(input: Node, value: Option<&CStr>) -> bool {
 }
 
 fn input_type_is(node: Node, want: &str) -> bool {
-    named(node, b"input") && node.attr(c"type").is_some_and(|t| ieq(t, want))
+    node.is_tag(crate::Tag::Input) && node.attr(c"type").is_some_and(|t| ieq(t, want))
 }
 
 fn radio_group_has_checked(scan: Node, owner: Option<Node>, name: &CStr, depth: i32) -> bool {
@@ -705,7 +697,7 @@ pub fn spellcheck_host(node: Node) -> Option<Node> {
 }
 
 pub fn value_is_dirty_mode(node: Node) -> bool {
-    if !raw_name_is(node, b"input") {
+    if !node.name_is_tag(crate::Tag::Input) {
         return false;
     }
     let ty = node.attr(c"type");
@@ -725,7 +717,7 @@ fn first_text_child(node: Node<'_>) -> Option<&CStr> {
 }
 
 pub fn used_value(node: Node<'_>) -> Option<&CStr> {
-    if raw_name_is(node, b"textarea") {
+    if node.name_is_tag(crate::Tag::Textarea) {
         if node.attr(c"data-nd-vdirty").is_some() {
             return Some(node.attr(c"data-nd-value").unwrap_or(c""));
         }
@@ -741,7 +733,7 @@ pub fn used_value(node: Node<'_>) -> Option<&CStr> {
 
 pub fn textarea_default_value(node: Option<Node>) -> Vec<u8> {
     let mut value = Vec::new();
-    if let Some(node) = node.filter(|n| raw_name_is(*n, b"textarea")) {
+    if let Some(node) = node.filter(|n| (*n).name_is_tag(crate::Tag::Textarea)) {
         for child in children(node).filter(|c| c.is_text()) {
             if let Some(text) = child.text() {
                 value.extend_from_slice(text.to_bytes());
@@ -785,7 +777,7 @@ pub fn is_checked(node: Node) -> bool {
 }
 
 pub fn editable_value(node: Node<'_>) -> &CStr {
-    if raw_name_is(node, b"textarea") {
+    if node.name_is_tag(crate::Tag::Textarea) {
         return used_value(node).unwrap_or(c"");
     }
     if is_contenteditable_host(node) {
@@ -795,7 +787,7 @@ pub fn editable_value(node: Node<'_>) -> &CStr {
 }
 
 pub fn set_editable_value(node: Node, value: &CStr) {
-    if raw_name_is(node, b"textarea") {
+    if node.name_is_tag(crate::Tag::Textarea) {
         let normalized = textarea_normalized(value.to_bytes());
         attrs::set_attribute(node, c"data-nd-value", Some(&normalized));
         attrs::set_attribute(node, c"data-nd-vdirty", Some(c"1".to_bytes()));
@@ -831,7 +823,7 @@ pub fn flatten_editable(node: Node) {
 }
 
 pub fn is_numeric_input(node: Node) -> bool {
-    named(node, b"input") && node.attr(c"type").is_some_and(|t| ieq(t, "number"))
+    node.is_tag(crate::Tag::Input) && node.attr(c"type").is_some_and(|t| ieq(t, "number"))
 }
 
 pub fn numeric_filter(insert: &[u8]) -> Vec<u8> {
@@ -843,7 +835,7 @@ pub fn numeric_filter(insert: &[u8]) -> Vec<u8> {
 }
 
 pub fn is_one_line_text(node: Node) -> bool {
-    if !named(node, b"input") {
+    if !node.is_tag(crate::Tag::Input) {
         return false;
     }
     let ty = node.attr(c"type");
@@ -886,12 +878,13 @@ pub fn form_owner(control: Node<'_>) -> Option<Node<'_>> {
         let tree_root = ancestors_and_self(control)
             .find(|n| n.parent().is_none() || is_shadow_root(*n))
             .unwrap_or(control);
-        return index::find_by_id(tree_root, form_id).filter(|owner| named(*owner, b"form"));
+        return index::find_by_id(tree_root, form_id)
+            .filter(|owner| (*owner).is_tag(crate::Tag::Form));
     }
     ancestors(control)
         .take(MAX_DEPTH as usize)
         .take_while(|p| !is_shadow_root(*p))
-        .find(|p| named(*p, b"form"))
+        .find(|p| (*p).is_tag(crate::Tag::Form))
 }
 
 fn reset_control(node: Node) {
@@ -906,7 +899,7 @@ fn reset_control(node: Node) {
         }
         Some(b"select") => {
             attrs::remove_attribute(node, c"data-nd-noselect");
-            for option in children(node).filter(|o| named(*o, b"option")) {
+            for option in children(node).filter(|o| (*o).is_tag(crate::Tag::Option)) {
                 attrs::remove_attribute(option, c"selected");
             }
         }
@@ -960,15 +953,15 @@ fn disabled_among<'a>(el: Node<'a>, chain: impl Iterator<Item = Node<'a>>) -> bo
     if el.attr(c"disabled").is_some() {
         return true;
     }
-    let is_option = named(el, b"option");
+    let is_option = el.is_tag(crate::Tag::Option);
     for p in chain {
-        if is_option && named(p, b"optgroup") && p.attr(c"disabled").is_some() {
+        if is_option && p.is_tag(crate::Tag::Optgroup) && p.attr(c"disabled").is_some() {
             return true;
         }
-        if !named(p, b"fieldset") || p.attr(c"disabled").is_none() {
+        if !p.is_tag(crate::Tag::Fieldset) || p.attr(c"disabled").is_none() {
             continue;
         }
-        let legend = children(p).find(|c| named(*c, b"legend"));
+        let legend = children(p).find(|c| (*c).is_tag(crate::Tag::Legend));
         if legend.is_some_and(|legend| tree::contains(legend.as_ptr(), el)) {
             continue;
         }

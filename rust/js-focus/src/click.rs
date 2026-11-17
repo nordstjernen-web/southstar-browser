@@ -8,7 +8,7 @@ use southstar_dom::tree::effectively_inert;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
-use crate::{Element, JsResult, has_attr, is_named};
+use crate::{Element, JsResult, has_attr};
 
 const FLAG_CLICK_IN_PROGRESS: u32 = 1 << 17;
 
@@ -69,7 +69,8 @@ fn dispatch_click(scope: &mut Scope<'_>, js: Js, el: Element) {
 }
 
 fn is_link(el: Element) -> bool {
-    (is_named(Some(el), b"a") || is_named(Some(el), b"area")) && has_attr(el, c"href")
+    (el.is_tag(southstar_dom::Tag::A) || el.is_tag(southstar_dom::Tag::Area))
+        && has_attr(el, c"href")
 }
 
 pub(crate) fn keyboard_activate(js: Js, el: Element, key: &[u8], keyup: bool) -> bool {

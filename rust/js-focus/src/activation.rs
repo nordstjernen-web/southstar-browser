@@ -39,7 +39,7 @@ fn is_interactive_content(el: Element) -> bool {
     if named_any(el, &["a", "area"]) {
         return has_attr(el, c"href");
     }
-    if named(el, "input") {
+    if el.is_tag(southstar_dom::Tag::Input) {
         return !input_type_is_hidden(el);
     }
     if named_any(el, &["audio", "video"]) {
@@ -63,13 +63,13 @@ pub(crate) fn has_activation_behavior(el: Element) -> bool {
     if named_any(el, &["a", "area"]) {
         return has_attr(el, c"href");
     }
-    if named(el, "input") {
+    if el.is_tag(southstar_dom::Tag::Input) {
         return !input_type_is_hidden(el);
     }
     if named_any(el, &["button", "label"]) {
         return true;
     }
-    named(el, "summary") && ffi::summary_toggle_target(el).is_some()
+    el.is_tag(southstar_dom::Tag::Summary) && ffi::summary_toggle_target(el).is_some()
 }
 
 pub(crate) fn click_activation_target(el: Element) -> Option<Element> {
@@ -213,11 +213,11 @@ pub(crate) fn activation_behavior(scope: &mut Scope<'_>, act: Element, target: E
     if js.is_null() {
         return;
     }
-    if named(act, "summary") {
+    if act.is_tag(southstar_dom::Tag::Summary) {
         js.activate_summary(act);
         return;
     }
-    if named(act, "label") {
+    if act.is_tag(southstar_dom::Tag::Label) {
         activate_label(js, act, target);
         return;
     }
@@ -228,7 +228,7 @@ pub(crate) fn activation_behavior(scope: &mut Scope<'_>, act: Element, target: E
     if ffi::is_disabled_form_control(act) {
         return;
     }
-    if named(act, "button") {
+    if act.is_tag(southstar_dom::Tag::Button) {
         js.button_activation(act, target);
         return;
     }

@@ -41,10 +41,6 @@ fn is_data(url: &[u8]) -> bool {
     url.starts_with(b"data:")
 }
 
-fn is_named(node: Option<Node<'_>>, tag: &[u8]) -> bool {
-    node.is_some_and(|n| n.element_name() == Some(tag))
-}
-
 impl Environment<'_> {
     fn select(
         &self,
@@ -121,7 +117,10 @@ impl Environment<'_> {
     pub fn choose<'a>(&self, node: Node<'a>) -> Chosen<'a> {
         let mut n = node;
         let mut img = None;
-        if is_named(Some(n), b"img") && is_named(n.parent(), b"picture") {
+        if n.is_tag(southstar_dom::Tag::Img)
+            && n.parent()
+                .is_some_and(|node| node.is_tag(southstar_dom::Tag::Picture))
+        {
             img = Some(node);
             n = n.parent().unwrap_or(n);
         }
@@ -133,7 +132,10 @@ impl Environment<'_> {
                 img: node,
             };
         }
-        let img = img.or_else(|| children(n).find(|c| is_named(Some(*c), b"img")));
+        let img = img.or_else(|| {
+            children(n)
+                .find(|c| (Some(*c)).is_some_and(|node| node.is_tag(southstar_dom::Tag::Img)))
+        });
         let source = self.picture_source(n, img);
         if let Some((url, density)) = source.as_ref().filter(|(url, _)| !is_data(url)) {
             return Chosen {

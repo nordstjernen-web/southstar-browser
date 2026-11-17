@@ -6,16 +6,16 @@
 use southstar_image::ImageRef;
 use southstar_js_engine::{Scope, Value};
 
-use crate::{Element, JsResult, ffi, named};
+use crate::{Element, JsResult, ffi};
 
 fn image_for(scope: &Scope<'_>, img: Option<Element>) -> Option<ImageRef<'static>> {
-    let img = img.filter(|&n| named(Some(n), b"img"))?;
+    let img = img.filter(|&n| n.is_tag(southstar_dom::Tag::Img))?;
     ffi::image_for_node(ffi::js_of(scope), img)
 }
 
 pub fn complete(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let node = ffi::unwrap_node(this);
-    let Some(img) = node.filter(|&n| named(Some(n), b"img")) else {
+    let Some(img) = node.filter(|&n| n.is_tag(southstar_dom::Tag::Img)) else {
         return Ok(Value::boolean(true));
     };
     if img.attr(c"src").is_none_or(|src| src.is_empty()) {

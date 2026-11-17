@@ -11,7 +11,7 @@ use southstar_style::{Display, PropId, StyleRef, StyleTable, display_of};
 use crate::boxes::{
     border_box, box_for_this, inline_rect_for_this, point_to_client, window_scroll,
 };
-use crate::{Element, JsResult, Rect, cmax, cmin, element_named, ffi, name_is, round_int};
+use crate::{Element, JsResult, Rect, cmax, cmin, ffi, name_is, round_int};
 
 const BOX_NORMAL: u8 = 0;
 const INNER_TABLE: u8 = 2;
@@ -78,7 +78,9 @@ pub fn get_offset_height(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -
 }
 
 fn is_root_name(node: Option<Element>) -> bool {
-    node.is_some_and(|n| name_is(n, "html") || name_is(n, "body"))
+    node.is_some_and(|n| {
+        n.name_is_tag(southstar_dom::Tag::Html) || n.name_is_tag(southstar_dom::Tag::Body)
+    })
 }
 
 fn client_size(scope: &mut Scope<'_>, this: &Value, horizontal: bool) -> JsResult {
@@ -97,7 +99,7 @@ fn client_size(scope: &mut Scope<'_>, this: &Value, horizontal: bool) -> JsResul
             Value::int(0)
         });
     };
-    if node.is_some_and(|n| name_is(n, "html")) {
+    if node.is_some_and(|n| n.name_is_tag(southstar_dom::Tag::Html)) {
         return Ok(round_int(viewport()));
     }
     let padding = b.padding();
@@ -179,7 +181,7 @@ fn offset_parent_candidate(js: ffi::Js, n: Element) -> bool {
     if !n.is_element() {
         return false;
     }
-    if element_named(n, "body") || element_named(n, "html") {
+    if n.is_tag(southstar_dom::Tag::Body) || n.is_tag(southstar_dom::Tag::Html) {
         return true;
     }
     let table = ffi::style_table(js);
@@ -192,7 +194,7 @@ fn offset_parent_candidate(js: ffi::Js, n: Element) -> bool {
 }
 
 fn offset_parent_is_static_root(js: ffi::Js, p: Element) -> bool {
-    if !element_named(p, "body") && !element_named(p, "html") {
+    if !p.is_tag(southstar_dom::Tag::Body) && !p.is_tag(southstar_dom::Tag::Html) {
         return false;
     }
     let table = ffi::style_table(js);
@@ -266,7 +268,7 @@ pub fn get_offset_parent(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -
 }
 
 fn is_scrolling_root(this: &Value) -> bool {
-    ffi::unwrap_node(this).is_some_and(|n| name_is(n, "html"))
+    ffi::unwrap_node(this).is_some_and(|n| n.name_is_tag(southstar_dom::Tag::Html))
 }
 
 pub(crate) fn scroll_offset(scope: &mut Scope<'_>, this: &Value, vertical: bool) -> Option<f64> {
@@ -511,7 +513,7 @@ pub fn dimension(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
         let value = ffi::attr_bytes(n, attr).unwrap_or_default();
         return Ok(scope.string_from_bytes(value));
     }
-    if let Some(n) = node.filter(|n| name_is(*n, "img")) {
+    if let Some(n) = node.filter(|n| (*n).name_is_tag(southstar_dom::Tag::Img)) {
         if let Some(b) = box_for_this(scope, this) {
             let r = border_box(b);
             return Ok(round_int(if width { r.w } else { r.h }));

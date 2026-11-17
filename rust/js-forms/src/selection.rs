@@ -8,7 +8,7 @@ use southstar_js_engine::{Scope, Value};
 use southstar_unicode::until_nul_owned;
 
 use crate::ffi::{self, Page};
-use crate::{Element, JsResult, length, named, to_uint32, type_of, uint32, value};
+use crate::{Element, JsResult, length, to_uint32, type_of, uint32, value};
 
 const EXCLUDED: [&str; 17] = [
     "hidden",
@@ -31,10 +31,10 @@ const EXCLUDED: [&str; 17] = [
 ];
 
 pub(crate) fn applies(el: Element) -> bool {
-    if named(el, "textarea") {
+    if el.is_tag(southstar_dom::Tag::Textarea) {
         return true;
     }
-    if !named(el, "input") {
+    if !el.is_tag(southstar_dom::Tag::Input) {
         return false;
     }
     match type_of(el).filter(|t| !t.is_empty()) {
@@ -202,7 +202,9 @@ pub fn set_selection_direction(scope: &mut Scope<'_>, this: &Value, args: &[Valu
 }
 
 pub fn text_length(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
-    if !ffi::element(this).is_some_and(|el| named(el, "input") || named(el, "textarea")) {
+    if !ffi::element(this).is_some_and(|el| {
+        el.is_tag(southstar_dom::Tag::Input) || el.is_tag(southstar_dom::Tag::Textarea)
+    }) {
         return Ok(Value::undefined());
     }
     Ok(Value::number(f64::from(value_length(scope, this))))
@@ -339,7 +341,7 @@ pub fn set_range_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Js
 }
 
 pub(crate) fn step(scope: &mut Scope<'_>, this: &Value, args: &[Value], sign: i32) -> JsResult {
-    let Some(el) = ffi::element(this).filter(|e| named(*e, "input")) else {
+    let Some(el) = ffi::element(this).filter(|e| (*e).is_tag(southstar_dom::Tag::Input)) else {
         return Err(scope.type_error("Illegal invocation"));
     };
     let n = match args.first() {

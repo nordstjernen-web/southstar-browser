@@ -6,7 +6,7 @@
 use southstar_dom::{children, index};
 use southstar_js_engine::{Scope, Value};
 
-use crate::{Element, JsResult, MAX_DEPTH, ffi, named, type_is, type_of};
+use crate::{Element, JsResult, MAX_DEPTH, ffi, type_is, type_of};
 
 pub(crate) fn is_labelable(node: Element) -> bool {
     match node.element_name() {
@@ -47,7 +47,7 @@ pub(crate) fn control_in_document(label: Element, doc: Option<Element>) -> Optio
 }
 
 pub fn control(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
-    let Some(label) = ffi::element(this).filter(|l| named(*l, "label")) else {
+    let Some(label) = ffi::element(this).filter(|l| (*l).is_tag(southstar_dom::Tag::Label)) else {
         return Ok(Value::null());
     };
     match associated_control(label) {

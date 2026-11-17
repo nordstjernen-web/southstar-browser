@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Kind, Node, WeakNode};
 
-use crate::ffi::{Js, is_named};
+use crate::ffi::Js;
 use crate::{
     ALREADY_STARTED, EMPTY_SOURCE, FLAG_NOT_PARSER_INSERTED, Schedule, Task, fetch, hold,
     import_map, page, scan, type_is_module,
@@ -174,7 +174,7 @@ pub(crate) fn drain_load_event_scripts(js: Js) {
 }
 
 pub(crate) fn script_needs_prepare(js: Js, script: Node) {
-    if !is_named(script, c"script")
+    if !script.is_tag(southstar_dom::Tag::Script)
         || script.flags() & FLAG_NOT_PARSER_INSERTED == 0
         || script.attr(EMPTY_SOURCE).is_none()
         || !js.in_page(script)
@@ -190,7 +190,10 @@ pub(crate) fn run_inserted_scripts(js: Js, root: Node) {
     if js.current_doc().is_none() || js.halted() {
         return;
     }
-    if let Some(parent) = root.parent().filter(|parent| is_named(*parent, c"script")) {
+    if let Some(parent) = root
+        .parent()
+        .filter(|parent| (*parent).is_tag(southstar_dom::Tag::Script))
+    {
         script_needs_prepare(js, parent);
         if root.kind() != Kind::Element {
             return;

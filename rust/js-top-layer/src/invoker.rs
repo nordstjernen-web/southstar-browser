@@ -14,7 +14,7 @@ use crate::ffi::{self, Js};
 use crate::popover::{self, PopoverType, Validity, is_showing, type_of};
 use crate::{
     AttrRef, Element, JsResult, arg, attr_is, inclusive_ancestor, is_connected, is_html_element,
-    is_named, peek, tree_root, with,
+    peek, tree_root, with,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -68,7 +68,7 @@ fn command_is_valid(cmd: Command, target: Element) -> bool {
         Command::Custom => true,
         _ if !is_html_element(Some(target)) => false,
         _ if is_popover_command(cmd) => true,
-        _ => is_named(Some(target), b"dialog"),
+        _ => target.is_tag(southstar_dom::Tag::Dialog),
     }
 }
 
@@ -194,10 +194,10 @@ pub(crate) fn is_button(el: Option<Element>) -> bool {
     let Some(el) = el else {
         return false;
     };
-    if is_named(Some(el), b"button") {
+    if el.is_tag(southstar_dom::Tag::Button) {
         return true;
     }
-    if !is_named(Some(el), b"input") {
+    if !el.is_tag(southstar_dom::Tag::Input) {
         return false;
     }
     ["submit", "reset", "image", "button"]
@@ -321,7 +321,7 @@ fn run_command(js: Js, button: Element, target: Element) {
                 popover::show(js, target, Some(button));
             }
         }
-        _ if is_named(Some(target), b"dialog") => {
+        _ if target.is_tag(southstar_dom::Tag::Dialog) => {
             let kind = match cmd {
                 Command::Close => DialogCommand::Close,
                 Command::RequestClose => DialogCommand::RequestClose,

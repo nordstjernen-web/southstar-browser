@@ -62,7 +62,7 @@ pub fn rel_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResul
 
 pub fn sandbox_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     match ffi::unwrap_node(this) {
-        Some(node) if !foreign(node) && named(node, "iframe") => {
+        Some(node) if !foreign(node) && node.is_tag(southstar_dom::Tag::Iframe) => {
             token_list(scope, this, c"sandbox")
         }
         _ => Ok(Value::undefined()),
@@ -73,10 +73,10 @@ pub fn sizes_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsRes
     let Some(node) = ffi::unwrap_node(this).filter(|&n| !foreign(n)) else {
         return Ok(Value::undefined());
     };
-    if named(node, "link") {
+    if node.is_tag(southstar_dom::Tag::Link) {
         return token_list(scope, this, c"sizes");
     }
-    if named(node, "img") || named(node, "source") {
+    if node.is_tag(southstar_dom::Tag::Img) || node.is_tag(southstar_dom::Tag::Source) {
         return ffi::reflect_str_get(scope, this, c"sizes");
     }
     Ok(Value::undefined())

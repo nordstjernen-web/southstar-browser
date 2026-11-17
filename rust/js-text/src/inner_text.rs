@@ -8,7 +8,7 @@ use core::ffi::CStr;
 use southstar_dom::{Kind as NodeKind, Node, children, serialize};
 use southstar_style::{Display, Kind, PropId, StyleRef, StyleTable};
 
-use crate::{MAX_DEPTH, element_named, ffi, name_in, name_is};
+use crate::{MAX_DEPTH, ffi, name_in};
 
 const SHADOW_ATTR: &CStr = c"data-nd-shadow-root";
 
@@ -363,11 +363,15 @@ fn rendered_child(parent: Node<'_>, child: Node<'_>) -> bool {
         return false;
     }
     let child_is = child.is_element() && child.name().is_some();
-    if name_is(parent, "select") {
+    if parent.name_is_tag_ignore_case(southstar_dom::Tag::Select) {
         return child_is && name_in(child, &["option", "optgroup"]);
     }
-    if name_is(parent, "optgroup") && parent.parent().is_some_and(|p| element_named(p, "select")) {
-        return child_is && name_is(child, "option");
+    if parent.name_is_tag_ignore_case(southstar_dom::Tag::Optgroup)
+        && parent
+            .parent()
+            .is_some_and(|p| p.is_tag(southstar_dom::Tag::Select))
+    {
+        return child_is && child.name_is_tag_ignore_case(southstar_dom::Tag::Option);
     }
     true
 }
@@ -384,7 +388,7 @@ fn collect_svg(node: Node<'_>, out: &mut Out, in_text: bool, tt: Option<Transfor
                 }
             }
             NodeKind::Element if child.name().is_some() && !name_in(child, SVG_UNRENDERED) => {
-                let text = in_text || name_is(child, "text");
+                let text = in_text || child.name_is_tag_ignore_case(southstar_dom::Tag::Text);
                 collect_svg(child, out, text, tt, depth + 1);
             }
             _ => {}
@@ -416,9 +420,11 @@ impl<'t> Walker<'t> {
     }
 
     fn children(&self, node: Node<'_>, out: &mut Out, inherited: Inherited, depth: i32) {
-        let details_closed = name_is(node, "details") && node.attr(c"open").is_none();
+        let details_closed = node.name_is_tag_ignore_case(southstar_dom::Tag::Details)
+            && node.attr(c"open").is_none();
         for child in children(node) {
-            let is_summary = child.is_element() && name_is(child, "summary");
+            let is_summary =
+                child.is_element() && child.name_is_tag_ignore_case(southstar_dom::Tag::Summary);
             if details_closed && !is_summary {
                 continue;
             }
@@ -461,7 +467,7 @@ impl<'t> Walker<'t> {
         if !node.is_element() {
             return;
         }
-        if !root && inherited.visible && element_named(node, "svg") {
+        if !root && inherited.visible && node.is_tag(southstar_dom::Tag::Svg) {
             let ss = self.style(node);
             if display(ss).is_none() || !visible(ss, inherited.visible) {
                 return;
@@ -505,14 +511,14 @@ impl<'t> Walker<'t> {
             return;
         }
         if !root {
-            if name_is(node, "br") {
+            if node.name_is_tag_ignore_case(southstar_dom::Tag::Br) {
                 if child.visible {
                     out.forced_break();
                 }
                 return;
             }
-            let is_p = name_is(node, "p");
-            let intrinsic_break = is_p || name_is(node, "select");
+            let is_p = node.name_is_tag_ignore_case(southstar_dom::Tag::P);
+            let intrinsic_break = is_p || node.name_is_tag_ignore_case(southstar_dom::Tag::Select);
             if is_atomic_inline(display(s)) && !intrinsic_break {
                 let mut sub = Out::default();
                 self.children(node, &mut sub, child, depth);

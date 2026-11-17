@@ -11,7 +11,7 @@ use southstar_dom::children;
 
 use crate::ffi::{self, Js};
 use crate::popover::open_state;
-use crate::{Element, has_attr, is_named};
+use crate::{Element, has_attr};
 
 fn close_others_in_group(js: Js, opened: Element, name: &CStr) {
     if name.is_empty() {
@@ -57,12 +57,13 @@ pub(crate) fn toggle_open(js: Js, details: Element, open: bool) {
 }
 
 pub(crate) fn summary_toggle_target(el: Option<Element>) -> Option<Element> {
-    let summary =
-        core::iter::successors(el, |c| c.parent()).find(|c| is_named(Some(*c), b"summary"))?;
+    let summary = core::iter::successors(el, |c| c.parent())
+        .find(|c| (Some(*c)).is_some_and(|node| node.is_tag(southstar_dom::Tag::Summary)))?;
     let details = summary
         .parent()
-        .filter(|d| is_named(Some(*d), b"details"))?;
-    let first = children(details).find(|c| is_named(Some(*c), b"summary"))?;
+        .filter(|d| (Some(*d)).is_some_and(|node| node.is_tag(southstar_dom::Tag::Details)))?;
+    let first = children(details)
+        .find(|c| (Some(*c)).is_some_and(|node| node.is_tag(southstar_dom::Tag::Summary)))?;
     (first == summary).then_some(details)
 }
 

@@ -8,7 +8,7 @@ use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
 use southstar_style::{PropId, StyleRef};
 
-use crate::{Element, Rect, element_named, ffi};
+use crate::{Element, Rect, ffi};
 
 pub(crate) fn border_box(b: BoxRef<'_>) -> Rect {
     let margin = b.margin();
@@ -169,7 +169,7 @@ pub(crate) fn window_scroll(scope: &mut Scope<'_>, prop: &str) -> f64 {
 fn owner_iframe(node: Option<Element>) -> Option<Element> {
     let mut p = node?.parent();
     while let Some(n) = p {
-        if element_named(n, "iframe") || element_named(n, "frame") {
+        if n.is_tag(southstar_dom::Tag::Iframe) || n.is_tag(southstar_dom::Tag::Frame) {
             return Some(n);
         }
         p = n.parent();

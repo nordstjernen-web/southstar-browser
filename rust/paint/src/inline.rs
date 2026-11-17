@@ -53,11 +53,6 @@ fn box_node(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()
 }
 
-fn node_named(n: Option<Node<'_>>, name: &[u8]) -> bool {
-    n.and_then(Node::name)
-        .is_some_and(|nm| nm.to_bytes() == name)
-}
-
 fn decoration_insert_around_atomics(
     attrs: &AttrList,
     a: Option<Attribute>,
@@ -715,7 +710,9 @@ fn paint_inline_make_layout(
                 }
             }
             k::INPUT_FIELD | k::INPUT_FIELD_FOCUSED | k::BUTTON => {
-                if !node_named(attr_node(r), b"textarea") {
+                if !(attr_node(r))
+                    .is_some_and(|node| node.name_is_tag(southstar_dom::Tag::Textarea))
+                {
                     attrs.insert_range(Some(Attribute::allow_breaks(false)), r.start, r.len);
                 }
             }
@@ -1383,7 +1380,7 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
         }
         let (r0, r1) = char_span(layout, r);
         let dom = attr_node(r);
-        if node_named(dom, b"option") {
+        if dom.is_some_and(|node| node.name_is_tag(southstar_dom::Tag::Option)) {
             let rx0 = text_x + f64::from(r0.x) / S;
             let rx1 = text_x + f64::from(r1.x + r1.width) / S;
             let ry0 = y_origin + f64::from(r0.y) / S;
@@ -1452,7 +1449,7 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
                 }
             }
         }
-        let is_textarea = node_named(dom, b"textarea");
+        let is_textarea = dom.is_some_and(|node| node.name_is_tag(southstar_dom::Tag::Textarea));
         if css_w <= 0.0 && r.kind == k::BUTTON {
             let mnw = inline_control_css_min_width(r, b);
             if mnw > 0.0 && x1 - x0 < mnw {

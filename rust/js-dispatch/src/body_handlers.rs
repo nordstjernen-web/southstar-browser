@@ -5,7 +5,7 @@
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::{Element, JsResult, is_named};
+use crate::{Element, JsResult};
 
 const WINDOW_REFLECTED: [&str; 22] = [
     "onafterprint",
@@ -96,7 +96,9 @@ pub(crate) fn forward_content_handler(
     name: &str,
     code: Option<&str>,
 ) {
-    if !node.is_element() || !(is_named(Some(node), b"body") || is_named(Some(node), b"frameset")) {
+    if !node.is_element()
+        || !(node.is_tag(southstar_dom::Tag::Body) || node.is_tag(southstar_dom::Tag::Frameset))
+    {
         return;
     }
     if !is_window_reflected(name) {

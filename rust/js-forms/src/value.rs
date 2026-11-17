@@ -11,7 +11,7 @@ use southstar_dom::{controls, select as dom_select};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, Page, cstring};
-use crate::{Element, JsResult, attr_bytes, c_bytes, name_is, named, selection, type_is, type_of};
+use crate::{Element, JsResult, attr_bytes, c_bytes, selection, type_is, type_of};
 
 const DAY_MS: f64 = 86_400_000.0;
 const HTML_MAXINT: i64 = 2_147_483_647;
@@ -36,7 +36,7 @@ pub(crate) enum InputKind {
 }
 
 pub(crate) fn kind_of(node: Element) -> InputKind {
-    if !named(node, "input") {
+    if !node.is_tag(southstar_dom::Tag::Input) {
         return InputKind::Other;
     }
     let Some(ty) = type_of(node) else {
@@ -253,7 +253,7 @@ fn number_of(ty: &CStr, value: &[u8]) -> Option<f64> {
 }
 
 pub(crate) fn sanitize(el: Element, value: &[u8]) -> Vec<u8> {
-    if !named(el, "input") {
+    if !el.is_tag(southstar_dom::Tag::Input) {
         return value.to_vec();
     }
     let ty = type_of(el).map_or_else(|| b"text".to_vec(), |t| t.to_bytes().to_ascii_lowercase());
@@ -285,7 +285,7 @@ pub(crate) fn sanitize(el: Element, value: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn resanitize(el: Element) {
-    if !named(el, "input") || el.attr(c"data-nd-vdirty").is_none() {
+    if !el.is_tag(southstar_dom::Tag::Input) || el.attr(c"data-nd-vdirty").is_none() {
         return;
     }
     let Some(current) = attr_bytes(el, c"data-nd-value").or_else(|| attr_bytes(el, c"value"))
@@ -409,7 +409,7 @@ pub fn range_number(scope: &mut Scope<'_>, this: &Value, magic: c_int) -> JsResu
     let Some(el) = ffi::element(this).filter(|e| e.name().is_some()) else {
         return Ok(scope.string(""));
     };
-    if name_is(el, "meter") {
+    if el.is_tag_ignore_case(southstar_dom::Tag::Meter) {
         let st = meter_state(el);
         let number = match magic {
             RANGE_MIN => Some(st.min),
@@ -423,7 +423,7 @@ pub fn range_number(scope: &mut Scope<'_>, this: &Value, magic: c_int) -> JsResu
             return Ok(Value::number(number));
         }
     }
-    if name_is(el, "progress") && magic == RANGE_MAX {
+    if el.is_tag_ignore_case(southstar_dom::Tag::Progress) && magic == RANGE_MAX {
         return Ok(Value::number(progress_state(el).max));
     }
     match usize::try_from(magic).ok().and_then(|m| RANGE_ATTRS.get(m)) {
@@ -444,17 +444,17 @@ pub fn set_range_number(
     let Some(attr) = usize::try_from(magic).ok().and_then(|m| RANGE_ATTRS.get(m)) else {
         return Ok(Value::undefined());
     };
-    if name_is(el, "meter") {
+    if el.is_tag_ignore_case(southstar_dom::Tag::Meter) {
         return set_double_attr(scope, el, attr, value, false);
     }
-    if name_is(el, "progress") && magic == RANGE_MAX {
+    if el.is_tag_ignore_case(southstar_dom::Tag::Progress) && magic == RANGE_MAX {
         return set_double_attr(scope, el, attr, value, true);
     }
     reflect_set(scope, el, value, attr)
 }
 
 pub fn progress_position(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
-    match ffi::element(this).filter(|e| name_is(*e, "progress")) {
+    match ffi::element(this).filter(|e| (*e).is_tag_ignore_case(southstar_dom::Tag::Progress)) {
         Some(el) => Ok(Value::number(progress_state(el).position)),
         None => Ok(Value::undefined()),
     }
@@ -559,7 +559,8 @@ pub fn set_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResul
         Some(b"data") => return reflect_set(scope, el, &value, c"value"),
         _ => {}
     }
-    let null_to_empty = value.is_null() && (named(el, "input") || named(el, "textarea"));
+    let null_to_empty = value.is_null()
+        && (el.is_tag(southstar_dom::Tag::Input) || el.is_tag(southstar_dom::Tag::Textarea));
     let selection_applies = selection::applies(el);
     let old_value = if selection_applies {
         get_value(scope, this, &[])?
@@ -606,7 +607,7 @@ pub fn set_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResul
     };
     ffi::set_attr(el, attr, &sanitized);
     ffi::remove_attr(el, c"data-nd-user-edited");
-    if named(el, "input") {
+    if el.is_tag(southstar_dom::Tag::Input) {
         ffi::set_attr(el, c"data-nd-vdirty", b"1");
     }
     if selection_applies {
@@ -619,7 +620,7 @@ pub fn set_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResul
 pub fn default_value(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let el = ffi::element(this);
     let text = match el {
-        Some(n) if named(n, "output") => {
+        Some(n) if n.is_tag(southstar_dom::Tag::Output) => {
             if n.attr(c"data-nd-output-dirty").is_some() {
                 attr_bytes(n, c"data-nd-output-default")
                     .unwrap_or_default()
@@ -628,7 +629,9 @@ pub fn default_value(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResu
                 n.collect_text()
             }
         }
-        Some(n) if named(n, "textarea") => controls::textarea_default_value(Some(n)),
+        Some(n) if n.is_tag(southstar_dom::Tag::Textarea) => {
+            controls::textarea_default_value(Some(n))
+        }
         _ => return Ok(reflect_get(scope, el, c"value")),
     };
     Ok(scope.string_from_bytes(&text))
@@ -639,8 +642,8 @@ pub fn set_default_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     let Some(el) = ffi::element(this) else {
         return Ok(Value::undefined());
     };
-    let output = named(el, "output");
-    if !output && !named(el, "textarea") {
+    let output = el.is_tag(southstar_dom::Tag::Output);
+    if !output && !el.is_tag(southstar_dom::Tag::Textarea) {
         return reflect_set(scope, el, &value, c"value");
     }
     let text = c_bytes(scope, &value).unwrap_or_default();
@@ -773,11 +776,13 @@ pub fn label(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(el) = ffi::element(this).filter(|e| e.element_name().is_some()) else {
         return Ok(Value::undefined());
     };
-    if name_is(el, "option") {
+    if el.is_tag_ignore_case(southstar_dom::Tag::Option) {
         let text = dom_select::option_label(el);
         return Ok(scope.string_from_bytes(&text));
     }
-    if name_is(el, "optgroup") || name_is(el, "track") {
+    if el.is_tag_ignore_case(southstar_dom::Tag::Optgroup)
+        || el.is_tag_ignore_case(southstar_dom::Tag::Track)
+    {
         return Ok(reflect_get(scope, Some(el), c"label"));
     }
     Ok(Value::undefined())
@@ -787,7 +792,10 @@ pub fn set_label(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResul
     let Some(el) = ffi::element(this).filter(|e| e.element_name().is_some()) else {
         return Ok(Value::undefined());
     };
-    if !(name_is(el, "option") || name_is(el, "optgroup") || name_is(el, "track")) {
+    if !(el.is_tag_ignore_case(southstar_dom::Tag::Option)
+        || el.is_tag_ignore_case(southstar_dom::Tag::Optgroup)
+        || el.is_tag_ignore_case(southstar_dom::Tag::Track))
+    {
         return Ok(Value::undefined());
     }
     reflect_set(scope, el, &arg(args), c"label")

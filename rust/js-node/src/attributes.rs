@@ -206,10 +206,6 @@ pub fn remove_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     Ok(Value::undefined())
 }
 
-fn named(node: Element, tag: &[u8]) -> bool {
-    node.element_name() == Some(tag)
-}
-
 fn is(name: &CStr, attr: &str) -> bool {
     name.to_bytes().eq_ignore_ascii_case(attr.as_bytes())
 }
@@ -236,20 +232,20 @@ impl OldValue {
 }
 
 fn after_set(js: Option<Js>, node: Element, name: &CStr, value: &CStr, changed: bool, had: bool) {
-    if changed && is(name, "type") && named(node, b"input") {
+    if changed && is(name, "type") && node.is_tag(southstar_dom::Tag::Input) {
         ffi::input_resanitize_value(node);
     }
-    if is(name, "open") && !had && named(node, b"details") {
+    if is(name, "open") && !had && node.is_tag(southstar_dom::Tag::Details) {
         ffi::details_toggle_open(js, node, true);
     }
-    if changed && is(name, "src") && named(node, b"img") {
+    if changed && is(name, "src") && node.is_tag(southstar_dom::Tag::Img) {
         ffi::start_image_load(js, node, value);
     }
-    if (named(node, b"iframe") && (is(name, "src") || is(name, "srcdoc")))
-        || (named(node, b"frame") && is(name, "src"))
+    if (node.is_tag(southstar_dom::Tag::Iframe) && (is(name, "src") || is(name, "srcdoc")))
+        || (node.is_tag(southstar_dom::Tag::Frame) && is(name, "src"))
     {
         ffi::schedule_iframe_load_full(js, node);
-    } else if changed && named(node, b"object") && is(name, "data") {
+    } else if changed && node.is_tag(southstar_dom::Tag::Object) && is(name, "data") {
         ffi::schedule_iframe_load(js, node);
     }
 }
@@ -323,7 +319,7 @@ pub fn remove_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
     if attrs::find(node, &name).is_some() {
         let js = ffi::js_of(scope);
         ffi::remove_attr_recorded(js, node, &name);
-        if is(&name, "open") && named(node, b"details") {
+        if is(&name, "open") && node.is_tag(southstar_dom::Tag::Details) {
             ffi::details_toggle_open(js, node, false);
         }
     }

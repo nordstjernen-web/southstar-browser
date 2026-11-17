@@ -10,7 +10,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi;
 use crate::tables::{self, IntAttr, IntKind};
-use crate::{Element, JsResult, is_named, name_is_any_of, raw_name, raw_name_is};
+use crate::{Element, JsResult, name_is_any_of, raw_name};
 
 const HTML_UNSIGNED_CAP: i64 = 4_294_967_295;
 const WIDTH_MAGIC: i32 = 8;
@@ -61,8 +61,8 @@ fn int_attr(magic: i32) -> Option<&'static IntAttr> {
 
 fn reflects_as_string(n: Element, attr: &[u8]) -> bool {
     match attr {
-        b"size" => raw_name_is(n, b"hr") || raw_name_is(n, b"font"),
-        b"cols" | b"rows" => raw_name_is(n, b"frameset"),
+        b"size" => n.name_is_tag(southstar_dom::Tag::Hr) || n.name_is_tag(southstar_dom::Tag::Font),
+        b"cols" | b"rows" => n.name_is_tag(southstar_dom::Tag::Frameset),
         _ => false,
     }
 }
@@ -71,11 +71,11 @@ fn adjusted(n: Element, def: &IntAttr, getter: bool) -> (IntKind, i32) {
     let attr = def.attr.to_bytes();
     let mut kind = def.kind;
     let mut default = def.default;
-    if raw_name_is(n, b"pre") && attr == b"width" {
+    if n.name_is_tag(southstar_dom::Tag::Pre) && attr == b"width" {
         kind = IntKind::Long;
     }
     if attr == b"size" {
-        if raw_name_is(n, b"input") {
+        if n.name_is_tag(southstar_dom::Tag::Input) {
             default = 20;
         } else {
             kind = IntKind::ULong;
@@ -84,7 +84,7 @@ fn adjusted(n: Element, def: &IntAttr, getter: bool) -> (IntKind, i32) {
             }
         }
     }
-    if raw_name_is(n, b"canvas") {
+    if n.name_is_tag(southstar_dom::Tag::Canvas) {
         match attr {
             b"width" => default = 300,
             b"height" => default = 150,
@@ -99,11 +99,12 @@ fn missing_dimension(scope: &Scope<'_>, n: Element, attr: &[u8]) -> Option<i32> 
     if !is_width && attr != b"height" {
         return None;
     }
-    if raw_name_is(n, b"img") {
+    if n.name_is_tag(southstar_dom::Tag::Img) {
         let (w, h) = ffi::image_natural_size(ffi::js_of(scope), n)?;
         return Some(if is_width { w } else { h });
     }
-    raw_name_is(n, b"canvas").then_some(if is_width { 300 } else { 150 })
+    n.name_is_tag(southstar_dom::Tag::Canvas)
+        .then_some(if is_width { 300 } else { 150 })
 }
 
 pub fn int_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
@@ -242,7 +243,9 @@ pub fn tab_index_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     };
     let Some(v) = ffi::attr_c(n, c"tabindex") else {
         let focusable = name_is_any_of(n, tables::FOCUSABLE_TAGS)
-            || (is_named(n, b"summary") && n.parent().is_some_and(|p| is_named(p, b"details")));
+            || (n.is_tag(southstar_dom::Tag::Summary)
+                && n.parent()
+                    .is_some_and(|p| p.is_tag(southstar_dom::Tag::Details)));
         return Ok(Value::int(if focusable { 0 } else { -1 }));
     };
     Ok(Value::int(controls::parse_int(
@@ -303,7 +306,7 @@ pub fn plain_bool_set(
 }
 
 fn is_async_method(n: Element, name: &CStr) -> bool {
-    name.to_bytes() == b"async" && !is_named(n, b"script")
+    name.to_bytes() == b"async" && !n.is_tag(southstar_dom::Tag::Script)
 }
 
 pub fn bool_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
@@ -327,7 +330,7 @@ pub fn bool_set(scope: &mut Scope<'_>, this: &Value, val: &Value, magic: i32) ->
     let on = scope.to_bool(val);
     let was_on = ffi::attr(n, name).is_some();
     toggle(scope, n, name, on);
-    if name.to_bytes() == b"open" && was_on != on && is_named(n, b"details") {
+    if name.to_bytes() == b"open" && was_on != on && n.is_tag(southstar_dom::Tag::Details) {
         ffi::details_toggle_open(ffi::js_of(scope), n, on);
     }
     Ok(())

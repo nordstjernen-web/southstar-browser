@@ -56,10 +56,6 @@ fn display_is_table(s: Option<StyleRef<'_>>) -> bool {
     d.box_ == DISPLAY_BOX_NORMAL && d.internal == INTERNAL_NONE && d.inner == INNER_TABLE
 }
 
-fn named(n: Node<'_>, name: &[u8]) -> bool {
-    n.element_name() == Some(name)
-}
-
 fn element_tag(n: Node<'_>) -> Option<&[u8]> {
     if n.is_element() {
         n.name().map(|name| name.to_bytes())
@@ -108,14 +104,14 @@ pub fn is_table_box(n: Option<Node<'_>>, styles: Styles) -> bool {
 }
 
 fn is_cell_element(n: Node<'_>, styles: Styles) -> bool {
-    if named(n, b"td") || named(n, b"th") {
+    if n.is_tag(southstar_dom::Tag::Td) || n.is_tag(southstar_dom::Tag::Th) {
         return true;
     }
     n.is_element() && is_internal(display(styles.get(n)), INTERNAL_CELL)
 }
 
 fn is_table_caption(n: Node<'_>, styles: Styles) -> bool {
-    if named(n, b"caption") {
+    if n.is_tag(southstar_dom::Tag::Caption) {
         return true;
     }
     n.is_element() && is_internal(display(styles.get(n)), INTERNAL_CAPTION)
@@ -170,10 +166,10 @@ enum RowGroup {
 }
 
 fn node_row_group(n: Node<'_>, styles: Styles) -> RowGroup {
-    if named(n, b"thead") {
+    if n.is_tag(southstar_dom::Tag::Thead) {
         return RowGroup::Header;
     }
-    if named(n, b"tfoot") {
+    if n.is_tag(southstar_dom::Tag::Tfoot) {
         return RowGroup::Footer;
     }
     let s = if !styles.is_some() {
@@ -352,7 +348,7 @@ fn collect_table_col_hints(table: BoxRef<'_>, n: Node<'_>, styles: Styles) {
         };
         let mut saw_col = false;
         for col in siblings_from(c.first_child()) {
-            if !named(col, b"col") {
+            if !col.is_tag(southstar_dom::Tag::Col) {
                 continue;
             }
             append_table_col_hint(table, col, styles, span_of(col), group_style);

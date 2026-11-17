@@ -24,7 +24,7 @@ fn has_token(el: Node<'_>, attr: &CStr, token: &[u8]) -> bool {
 fn in_head(el: Node<'_>) -> bool {
     southstar_dom::ancestors(el)
         .take_while(|p| p.kind() == Kind::Element)
-        .any(|p| is_named(p, c"head"))
+        .any(|p| p.is_tag(southstar_dom::Tag::Head))
 }
 
 fn media_applies_to_screen(media: Option<&CStr>) -> bool {
@@ -44,10 +44,10 @@ pub(crate) fn render_blocking(el: Node<'_>) -> bool {
     if el.flags() & FLAG_NOT_PARSER_INSERTED != 0 {
         return false;
     }
-    if is_named(el, c"script") {
+    if el.is_tag(southstar_dom::Tag::Script) {
         return !type_is_module(el) && el.attr(c"async").is_none() && el.attr(c"defer").is_none();
     }
-    if is_named(el, c"link") {
+    if el.is_tag(southstar_dom::Tag::Link) {
         return has_token(el, c"rel", b"stylesheet")
             && !has_token(el, c"rel", b"alternate")
             && media_applies_to_screen(el.attr(c"media"));

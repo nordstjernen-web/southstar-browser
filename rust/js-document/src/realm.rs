@@ -10,7 +10,7 @@ use southstar_unicode::until_nul;
 
 use crate::ffi::{self, Js};
 use crate::write::{append_args, dynamic_markup_active, throw_during_construction};
-use crate::{Element, JsResult, element_named};
+use crate::{Element, JsResult};
 
 const REALM_MARK: &str = "\u{fffd}realmdoc";
 const WRITE_BUFFER: &str = "\u{fffd}wbuf";
@@ -341,7 +341,9 @@ fn set_body(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
 fn get_head(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let head = ffi::unwrap_node(this)
         .and_then(|doc| first_child_of_kind(doc, Kind::Element))
-        .and_then(|html| southstar_dom::children(html).find(|c| element_named(*c, "head")));
+        .and_then(|html| {
+            southstar_dom::children(html).find(|c| (*c).is_tag(southstar_dom::Tag::Head))
+        });
     match head {
         Some(head) => Ok(ffi::wrap_node(scope, Some(head))),
         None => Ok(Value::null()),
@@ -408,8 +410,9 @@ fn get_element_by_id(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
 }
 
 fn frame_host(doc: Element) -> Option<Element> {
-    doc.parent()
-        .filter(|host| element_named(*host, "iframe") || element_named(*host, "frame"))
+    doc.parent().filter(|host| {
+        (*host).is_tag(southstar_dom::Tag::Iframe) || (*host).is_tag(southstar_dom::Tag::Frame)
+    })
 }
 
 pub(crate) fn open(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
