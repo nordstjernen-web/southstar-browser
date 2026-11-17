@@ -32,10 +32,6 @@ pub(crate) fn raw_name(node: Element) -> Option<&'static [u8]> {
     node.name().map(CStr::to_bytes)
 }
 
-pub(crate) fn raw_name_is(node: Element, tag: &[u8]) -> bool {
-    raw_name(node) == Some(tag)
-}
-
 pub(crate) fn is_named(node: Element, tag: &[u8]) -> bool {
     node.element_name() == Some(tag)
 }

@@ -113,10 +113,6 @@ pub(crate) fn teardown(js: Js) {
     drop(page);
 }
 
-pub(crate) fn is_named(n: Option<Element>, name: &[u8]) -> bool {
-    n.is_some_and(|n| n.element_name() == Some(name))
-}
-
 pub(crate) fn has_attr(n: Element, name: &core::ffi::CStr) -> bool {
     n.attr(name).is_some()
 }

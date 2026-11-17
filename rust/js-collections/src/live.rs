@@ -20,7 +20,7 @@ use crate::nodelist::{self, array_length};
 use crate::page::{self, LiveProtos};
 use crate::{
     Element, FLAG_QUIRKS, FLAG_XML_DOC, FOREIGN, JsResult, arg, class_tokens, element_children,
-    hidden_child, is_named, is_shadow_root, is_template, push, walk_elements,
+    hidden_child, is_shadow_root, is_template, push, walk_elements,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -313,7 +313,9 @@ fn links(node: Element, depth: i32, visit: &mut dyn FnMut(Element)) {
         return;
     }
     for child in element_children(node) {
-        if (is_named(child, b"a") || is_named(child, b"area")) && child.attr(c"href").is_some() {
+        if (child.is_tag(southstar_dom::Tag::A) || child.is_tag(southstar_dom::Tag::Area))
+            && child.attr(c"href").is_some()
+        {
             visit(child);
         }
         links(child, depth + 1, visit);
@@ -406,14 +408,14 @@ fn build(scope: &mut Scope<'_>, back: &Live) -> (Value, u32) {
             });
         }
         LiveKind::FormElements => {
-            if is_named(root, b"form") {
+            if root.is_tag(southstar_dom::Tag::Form) {
                 form_listed_controls(root, |control| add(scope, control));
-            } else if is_named(root, b"fieldset") {
+            } else if root.is_tag(southstar_dom::Tag::Fieldset) {
                 fieldset_listed(root, 0, &mut |n| add(scope, n));
             }
         }
         LiveKind::RadioNodeList => {
-            if is_named(root, b"form") {
+            if root.is_tag(southstar_dom::Tag::Form) {
                 let doc = root.root();
                 radio_nodes(root, doc, back.param(), 0, &mut |n| add(scope, n));
             }

@@ -103,7 +103,9 @@ fn render_seq(
     let (mut max_ascent, mut max_descent) = (0.0, 0.0);
     let mut any = false;
     for child in children(parent).filter(|child| is_renderable(*child)) {
-        if tag_is(child, "annotation") || tag_is(child, "annotation-xml") {
+        if tag_is(child, "annotation")
+            || child.is_tag_ignore_case(southstar_dom::Tag::AnnotationXml)
+        {
             continue;
         }
         let e = render(canvas, Some(child), fpx, depth + 1, cx, by);

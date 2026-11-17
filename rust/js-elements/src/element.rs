@@ -6,7 +6,7 @@
 use southstar_dom::{MAX_DEPTH, ancestors_and_self, children};
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::{Element, JsResult, ffi, named};
+use crate::{Element, JsResult, ffi};
 
 const FLAG_SHEET_DISABLED: u32 = 1 << 20;
 
@@ -60,7 +60,8 @@ pub(crate) fn build_labels(scope: &mut Scope<'_>, control: Option<Element>) -> J
         if depth >= MAX_DEPTH {
             return;
         }
-        if named(Some(scan), b"label") && ffi::label_associated_control(scan) == control {
+        if scan.is_tag(southstar_dom::Tag::Label) && ffi::label_associated_control(scan) == control
+        {
             out.push(scan);
         }
         for child in children(scan) {
@@ -125,7 +126,7 @@ pub fn disabled(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::boolean(false));
     };
-    if named(Some(node), b"style") {
+    if node.is_tag(southstar_dom::Tag::Style) {
         return Ok(Value::boolean(node.flags() & FLAG_SHEET_DISABLED != 0));
     }
     Ok(Value::boolean(node.attr(c"disabled").is_some()))
@@ -137,7 +138,7 @@ pub fn set_disabled(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsRes
     };
     let js = ffi::js_of(scope);
     let disabled = scope.to_bool(value);
-    if named(Some(node), b"style") {
+    if node.is_tag(southstar_dom::Tag::Style) {
         let was_disabled = node.flags() & FLAG_SHEET_DISABLED != 0;
         if disabled {
             node.add_flags(FLAG_SHEET_DISABLED);
@@ -161,9 +162,10 @@ pub fn set_disabled(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsRes
 
 fn options(select: Element) -> impl Iterator<Item = Element> {
     children(select).flat_map(|child| {
-        let direct = named(Some(child), b"option").then_some(child);
-        let grouped = named(Some(child), b"optgroup")
-            .then(|| children(child).filter(|&c| named(Some(c), b"option")))
+        let direct = child.is_tag(southstar_dom::Tag::Option).then_some(child);
+        let grouped = child
+            .is_tag(southstar_dom::Tag::Optgroup)
+            .then(|| children(child).filter(|&c| c.is_tag(southstar_dom::Tag::Option)))
             .into_iter()
             .flatten();
         direct.into_iter().chain(grouped)
@@ -174,7 +176,7 @@ pub fn option_index(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(option) = ffi::unwrap_node(this) else {
         return Ok(Value::int(-1));
     };
-    let select = southstar_dom::ancestors(option).find(|&p| named(Some(p), b"select"));
+    let select = southstar_dom::ancestors(option).find(|&p| p.is_tag(southstar_dom::Tag::Select));
     let index = select
         .and_then(|select| options(select).position(|o| o == option))
         .map_or(-1, |i| i as i32);
@@ -183,7 +185,7 @@ pub fn option_index(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
 
 pub(crate) fn select_length(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let count = ffi::unwrap_node(this)
-        .filter(|&n| named(Some(n), b"select"))
+        .filter(|&n| n.is_tag(southstar_dom::Tag::Select))
         .map_or(0, |select| options(select).count() as i32);
     Ok(Value::int(count))
 }
@@ -226,7 +228,7 @@ pub fn list(scope: &mut Scope<'_>, this: &Value) -> JsResult {
 
 pub fn form(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let mut node = ffi::unwrap_node(this);
-    if named(node, b"label") {
+    if node.is_some_and(|node| node.is_tag(southstar_dom::Tag::Label)) {
         node = node.and_then(ffi::label_associated_control);
     }
     match node.and_then(southstar_dom::controls::form_owner) {

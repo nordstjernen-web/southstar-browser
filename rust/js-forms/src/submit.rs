@@ -8,10 +8,7 @@ use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Page};
 use crate::validity::first_invalid;
-use crate::{
-    Element, JsResult, MAX_DEPTH, form_owner, name_is, named, non_empty, text_is, text_is_any,
-    type_of,
-};
+use crate::{Element, JsResult, MAX_DEPTH, form_owner, non_empty, text_is, text_is_any, type_of};
 
 const SANDBOX_BLOCKED: &core::ffi::CStr =
     c"Blocked form submission: sandboxed iframe without allow-forms";
@@ -21,7 +18,7 @@ pub(crate) fn is_submit_trigger(node: Element) -> bool {
         return false;
     }
     let ty = type_of(node);
-    if name_is(node, "button") {
+    if node.is_tag_ignore_case(southstar_dom::Tag::Button) {
         if text_is(ty, "submit") {
             return true;
         }
@@ -30,15 +27,18 @@ pub(crate) fn is_submit_trigger(node: Element) -> bool {
         }
         return node.attr(c"command").is_none()
             && node.attr(c"commandfor").is_none()
-            && !node.parent().is_some_and(|p| named(p, "select"));
+            && !node
+                .parent()
+                .is_some_and(|p| p.is_tag(southstar_dom::Tag::Select));
     }
-    name_is(node, "input") && text_is_any(ty, &["submit", "image"])
+    node.is_tag_ignore_case(southstar_dom::Tag::Input) && text_is_any(ty, &["submit", "image"])
 }
 
 pub(crate) fn is_reset_trigger(node: Element) -> bool {
     node.element_name().is_some()
         && text_is(type_of(node), "reset")
-        && (name_is(node, "button") || name_is(node, "input"))
+        && (node.is_tag_ignore_case(southstar_dom::Tag::Button)
+            || node.is_tag_ignore_case(southstar_dom::Tag::Input))
 }
 
 fn close_dialog_form(page: Option<Page>, form: Element, submitter: Option<Element>) -> bool {
@@ -49,7 +49,8 @@ fn close_dialog_form(page: Option<Page>, form: Element, submitter: Option<Elemen
     if !text_is(method, "dialog") {
         return false;
     }
-    let Some(dialog) = ancestors_and_self(form).find(|n| named(*n, "dialog")) else {
+    let Some(dialog) = ancestors_and_self(form).find(|n| (*n).is_tag(southstar_dom::Tag::Dialog))
+    else {
         return false;
     };
     let return_value = submitter
@@ -104,7 +105,7 @@ fn reset_owned_outputs(page: Option<Page>, form: Element, scan: Element, depth: 
     if depth >= MAX_DEPTH {
         return;
     }
-    if named(scan, "output")
+    if scan.is_tag(southstar_dom::Tag::Output)
         && form_owner(scan) == Some(form)
         && scan.attr(c"data-nd-output-dirty").is_some()
     {
@@ -146,7 +147,7 @@ pub fn request_submit_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     let (Some(form), Some(_)) = (form, Page::of(scope)) else {
         return Ok(Value::undefined());
     };
-    if !named(form, "form") {
+    if !form.is_tag(southstar_dom::Tag::Form) {
         return Ok(Value::undefined());
     }
     let mut submitter = None;
@@ -170,7 +171,7 @@ pub fn submit_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
     let (Some(form), Some(page)) = (ffi::element(this), Page::of(scope)) else {
         return Ok(Value::undefined());
     };
-    if !name_is(form, "form") {
+    if !form.is_tag_ignore_case(southstar_dom::Tag::Form) {
         return Ok(Value::undefined());
     }
     let submitter = args.first().and_then(ffi::element);
@@ -181,7 +182,9 @@ pub fn submit_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
 }
 
 pub fn reset_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
-    if let Some(form) = ffi::element(this).filter(|el| name_is(*el, "form")) {
+    if let Some(form) =
+        ffi::element(this).filter(|el| (*el).is_tag_ignore_case(southstar_dom::Tag::Form))
+    {
         reset_form(scope, Some(form));
     }
     Ok(Value::undefined())

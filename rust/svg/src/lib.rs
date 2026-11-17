@@ -513,7 +513,7 @@ impl<'a> Ctx<'a> {
         let mut cur = Some(n);
         for _ in 0..MAX_HREF_CHAIN {
             let c = cur?;
-            if children(c).any(|s| is_element(s) && name_is(s, b"stop")) {
+            if children(c).any(|s| is_element(s) && s.name_is_tag(southstar_dom::Tag::Stop)) {
                 return Some(c);
             }
             cur = self.href_target(c);
@@ -700,7 +700,7 @@ impl<'a> Ctx<'a> {
     fn add_stops(&self, pat: &Pattern, owner: Node<'a>, st: &State, alpha: f64) {
         let mut last = 0.0;
         for c in children(owner) {
-            if !is_element(c) || !name_is(c, b"stop") {
+            if !is_element(c) || !c.name_is_tag(southstar_dom::Tag::Stop) {
                 continue;
             }
             let os = self.prop(c, c"offset");
@@ -916,7 +916,7 @@ impl<'a> Ctx<'a> {
             if !is_element(c) || c.name().is_none() {
                 continue;
             }
-            if name_is(c, b"use") {
+            if c.name_is_tag(southstar_dom::Tag::Use) {
                 let t = self.href_target(c);
                 if let Some(t) = t.filter(|_| self.depth < MAX_DEPTH) {
                     self.depth += 1;
@@ -1263,7 +1263,7 @@ impl<'a> Ctx<'a> {
         let outer_owner = self.hit_enter_use(n);
         self.depth += 1;
         self.use_depth += 1;
-        if name_is(t, b"symbol") {
+        if t.name_is_tag(southstar_dom::Tag::Symbol) {
             let w = attr_length(n, c"width", self.vw, fs, self.vw);
             let h = attr_length(n, c"height", self.vh, fs, self.vh);
             cr.rectangle(0.0, 0.0, w, h);
@@ -1380,7 +1380,7 @@ impl<'a> Ctx<'a> {
 }
 
 pub fn is_root(n: Node<'_>) -> bool {
-    is_element(n) && name_is(n, b"svg")
+    is_element(n) && n.name_is_tag(southstar_dom::Tag::Svg)
 }
 
 pub fn find_root(doc: Node<'_>) -> Option<Node<'_>> {

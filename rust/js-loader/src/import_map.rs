@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{MAX_DEPTH, Node};
 
-use crate::ffi::{Js, hidden_child, is_named, url_resolve};
+use crate::ffi::{Js, hidden_child, url_resolve};
 use crate::{ALREADY_STARTED, page};
 
 fn add(js: Js, key: &[u8], value: &[u8], base: Option<&CStr>) {
@@ -71,7 +71,7 @@ pub(crate) fn register_in(js: Js, root: Node) {
         if depth >= MAX_DEPTH || (depth > 0 && hidden_child(n)) {
             return;
         }
-        if is_named(n, c"script") {
+        if n.is_tag(southstar_dom::Tag::Script) {
             let is_import_map = n
                 .attr(c"type")
                 .is_some_and(|ty| ty.to_bytes().eq_ignore_ascii_case(b"importmap"));

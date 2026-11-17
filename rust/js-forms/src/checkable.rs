@@ -9,7 +9,7 @@ use southstar_dom::{Kind, ancestors_and_self, children, controls};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Page};
-use crate::{Element, JsResult, form_owner, labels, named, type_is, type_of};
+use crate::{Element, JsResult, form_owner, labels, type_is, type_of};
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
 const FLAG_INPUT_INDETERMINATE: u32 = 1 << 18;
@@ -22,7 +22,7 @@ pub struct ClickState {
 }
 
 pub(crate) fn kind(el: Element) -> i32 {
-    if !named(el, "input") {
+    if !el.is_tag(southstar_dom::Tag::Input) {
         return 0;
     }
     if type_is(el, "checkbox") {
@@ -67,7 +67,7 @@ pub(crate) fn clear_radio_group(page: Option<Page>, radio: Element) -> Option<El
     let mut queue = VecDeque::from([doc]);
     while let Some(n) = queue.pop_front() {
         if n != radio
-            && named(n, "input")
+            && n.is_tag(southstar_dom::Tag::Input)
             && type_of(n).is_some()
             && type_is(n, "radio")
             && n.attr(c"name").is_some_and(|nm| nm.to_bytes() == group)
@@ -138,16 +138,16 @@ pub(crate) fn post_click(
 pub(crate) fn click_activate(page: Page, node: Element) -> bool {
     let mut control = None;
     for cur in ancestors_and_self(node) {
-        if named(cur, "label") {
+        if cur.is_tag(southstar_dom::Tag::Label) {
             control = labels::control_in_document(cur, page.current_document());
             break;
         }
-        if named(cur, "input") {
+        if cur.is_tag(southstar_dom::Tag::Input) {
             control = Some(cur);
             break;
         }
     }
-    let Some(control) = control.filter(|c| named(*c, "input")) else {
+    let Some(control) = control.filter(|c| (*c).is_tag(southstar_dom::Tag::Input)) else {
         return false;
     };
     if controls::effectively_disabled(control) || southstar_dom::tree::effectively_inert(control) {

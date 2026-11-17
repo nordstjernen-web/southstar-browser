@@ -5,7 +5,7 @@
 
 use southstar_dom::{MAX_DEPTH, Node};
 
-use crate::ffi::{hidden_child, is_named};
+use crate::ffi::hidden_child;
 use crate::{
     ALREADY_STARTED, Task, link_has_pending_load, schedule_for, skipped_by_nomodule, type_supported,
 };
@@ -19,7 +19,7 @@ pub(crate) fn mark_scripts_already_started(root: Node) {
         if skip(n, depth) {
             return;
         }
-        if is_named(n, c"script") {
+        if n.is_tag(southstar_dom::Tag::Script) {
             crate::mark(n, ALREADY_STARTED);
             return;
         }
@@ -35,7 +35,7 @@ pub(crate) fn collect_script_tasks(root: Node<'_>) -> Vec<Task<'_>> {
         if skip(n, depth) {
             return;
         }
-        if is_named(n, c"script") {
+        if n.is_tag(southstar_dom::Tag::Script) {
             if n.attr(ALREADY_STARTED).is_some() {
                 return;
             }
@@ -66,7 +66,7 @@ pub(crate) fn has_pending_script(root: Node) -> bool {
         if skip(n, depth) {
             return false;
         }
-        if is_named(n, c"script") && n.attr(ALREADY_STARTED).is_none() {
+        if n.is_tag(southstar_dom::Tag::Script) && n.attr(ALREADY_STARTED).is_none() {
             return true;
         }
         if n.is_html_tag(southstar_dom::Tag::Template) {

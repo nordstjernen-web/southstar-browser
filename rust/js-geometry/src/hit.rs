@@ -8,7 +8,7 @@ use southstar_js_engine::{Scope, Value};
 use southstar_layout::BoxRef;
 
 use crate::boxes::{visual_border_box, window_scroll};
-use crate::{Element, JsResult, element_named, ffi};
+use crate::{Element, JsResult, ffi};
 
 struct Hit {
     node: Element,
@@ -36,8 +36,9 @@ fn point_usable(x: f64, y: f64) -> bool {
 
 fn frame_of(doc: Option<Element>) -> Option<Element> {
     let doc = doc.filter(|d| d.kind() == Kind::Document)?;
-    doc.parent()
-        .filter(|p| element_named(*p, "iframe") || element_named(*p, "frame"))
+    doc.parent().filter(|p| {
+        (*p).is_tag(southstar_dom::Tag::Iframe) || (*p).is_tag(southstar_dom::Tag::Frame)
+    })
 }
 
 fn frame_point(root: BoxRef<'_>, frame: Element, x: &mut f64, y: &mut f64) -> bool {

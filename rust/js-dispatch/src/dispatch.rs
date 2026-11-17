@@ -12,8 +12,8 @@ use crate::ffi::{self, Js};
 use crate::handlers;
 use crate::listeners::{Listener, retire};
 use crate::{
-    DispatchPath, Element, FLAG_HAS_LISTENERS, get, is_document, is_named, is_real_document,
-    message_of, nearest_document, set, truthy,
+    DispatchPath, Element, FLAG_HAS_LISTENERS, get, is_document, is_real_document, message_of,
+    nearest_document, set, truthy,
 };
 
 pub(crate) fn init_flags(kind: &str, at_document: bool) -> (bool, bool) {
@@ -258,7 +258,8 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
     }
     let mut bubble_len = path_len;
     if matches!(kind, "submit" | "reset")
-        && let Some(form) = (1..path_len).find(|&i| is_named(node_at(i), b"form"))
+        && let Some(form) = (1..path_len)
+            .find(|&i| (node_at(i)).is_some_and(|node| node.is_tag(southstar_dom::Tag::Form)))
     {
         bubble_len = form;
     }
@@ -533,9 +534,9 @@ pub(crate) fn window_for_document(js: Js, scope: &mut Scope<'_>, doc: Option<Ele
     if let Some(doc) = doc
         && Some(doc) != js.current_document()
         && let Some(frame) = doc.parent()
-        && (is_named(Some(frame), b"iframe")
-            || is_named(Some(frame), b"frame")
-            || is_named(Some(frame), b"object"))
+        && (frame.is_tag(southstar_dom::Tag::Iframe)
+            || frame.is_tag(southstar_dom::Tag::Frame)
+            || frame.is_tag(southstar_dom::Tag::Object))
     {
         let realm = js.frame_realm_window(frame);
         if realm.is_object() {

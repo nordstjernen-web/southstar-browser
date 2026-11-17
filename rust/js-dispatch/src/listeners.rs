@@ -10,7 +10,7 @@ use southstar_dom::WeakNode;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
-use crate::{Element, FLAG_HAS_LISTENERS, JsResult, arg, get, is_named, same_object};
+use crate::{Element, FLAG_HAS_LISTENERS, JsResult, arg, get, same_object};
 
 pub(crate) struct Listener {
     pub target: WeakNode,
@@ -239,7 +239,7 @@ pub fn element_add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRes
         && is_passive_default(reg.kind)
         && let Some(doc) = js.current_document()
     {
-        let html = if is_named(Some(doc), b"html") {
+        let html = if doc.is_tag(southstar_dom::Tag::Html) {
             Some(doc)
         } else {
             ffi::first_element(doc, c"html")

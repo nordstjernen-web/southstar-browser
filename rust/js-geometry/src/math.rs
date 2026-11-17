@@ -7,13 +7,13 @@ use southstar_js_engine::Scope;
 use southstar_style::PropId;
 
 use crate::boxes::border_box;
-use crate::{Element, Rect, element_named, ffi};
+use crate::{Element, Rect, ffi};
 
 const DEFAULT_FONT_PX: f64 = 16.0;
 
 pub(crate) fn client_rect(scope: &mut Scope<'_>, node: Option<Element>) -> Option<Rect> {
     let node = node?;
-    let math = southstar_dom::ancestors(node).find(|n| element_named(*n, "math"))?;
+    let math = southstar_dom::ancestors(node).find(|n| (*n).is_tag(southstar_dom::Tag::Math))?;
     let js = ffi::js_of(scope);
     if js.is_null() {
         return None;

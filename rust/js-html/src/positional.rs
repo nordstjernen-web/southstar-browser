@@ -45,10 +45,6 @@ enum Resolved {
     Refuse,
 }
 
-fn is_html_element(n: Element, name: &[u8]) -> bool {
-    n.kind() == Kind::Element && n.element_name() == Some(name)
-}
-
 fn is_script(n: Element) -> bool {
     let Some(name) = n
         .element_name()
@@ -81,13 +77,13 @@ fn receiver_target(this: Element, place: Place, safe: bool) -> Resolved {
     if this.kind() != Kind::Element {
         return Resolved::Nothing;
     }
-    if place != Place::Replace && is_html_element(this, b"html") {
+    if place != Place::Replace && this.is_tag(southstar_dom::Tag::Html) {
         return Resolved::Refuse;
     }
     if safe && is_script(this) {
         return Resolved::Nothing;
     }
-    if is_html_element(this, b"template") {
+    if this.is_tag(southstar_dom::Tag::Template) {
         return Resolved::Insert(Target {
             container: southstar_dom::node::template_content(this),
             context: Context::Element(this),
@@ -119,8 +115,8 @@ fn sibling_target(this: Element, safe: bool) -> Resolved {
         });
     }
     if parent.kind() != Kind::Element
-        || is_html_element(parent, b"html")
-        || is_html_element(parent, b"template")
+        || parent.is_tag(southstar_dom::Tag::Html)
+        || parent.is_tag(southstar_dom::Tag::Template)
     {
         return Resolved::Refuse;
     }

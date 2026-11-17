@@ -13,7 +13,7 @@ use crate::ffi::{self, Js};
 use crate::popover::{self, is_showing, queue_toggle_task};
 use crate::{
     Element, JsResult, arg, flat_inclusive_ancestors, has_attr, inclusive_ancestor, info,
-    info_peek, is_connected, is_named, peek, with,
+    info_peek, is_connected, peek, with,
 };
 
 const RETURN_VALUE_KEY: &str = "__nd_dialogReturnValue";
@@ -431,8 +431,10 @@ pub(crate) enum Command {
 }
 
 fn nearest_clicked(target: Element) -> Option<Element> {
-    flat_inclusive_ancestors(target)
-        .find(|c| is_named(Some(*c), b"dialog") && has_attr(*c, c"open"))
+    flat_inclusive_ancestors(target).find(|c| {
+        (Some(*c)).is_some_and(|node| node.is_tag(southstar_dom::Tag::Dialog))
+            && has_attr(*c, c"open")
+    })
 }
 
 fn topmost_open(js: Js) -> Option<Element> {
@@ -440,7 +442,7 @@ fn topmost_open(js: Js) -> Option<Element> {
         page.close_watchers
             .iter()
             .rev()
-            .find(|d| is_named(Some(**d), b"dialog"))
+            .find(|d| (Some(**d)).is_some_and(|node| node.is_tag(southstar_dom::Tag::Dialog)))
             .copied()
     })
     .flatten()
@@ -489,7 +491,7 @@ pub(crate) fn process_close_request(js: Js) -> bool {
     let Some(top) = peek(js, |page| page.close_watchers.last().copied()).flatten() else {
         return false;
     };
-    if !is_named(Some(top), b"dialog") || is_showing(top) {
+    if !top.is_tag(southstar_dom::Tag::Dialog) || is_showing(top) {
         popover::hide(js, top, true, true, None);
         return true;
     }

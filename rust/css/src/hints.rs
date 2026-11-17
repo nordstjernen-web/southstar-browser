@@ -9,7 +9,7 @@ use std::ffi::CString;
 use southstar_dom::{FLAG_SVG_NS, Kind, Node, controls};
 
 use crate::color;
-use crate::element_state::{attr, attr_bytes, named};
+use crate::element_state::{attr, attr_bytes};
 use crate::ffi;
 use crate::frameset;
 use crate::property::eq;
@@ -223,30 +223,33 @@ fn table_frame_border_style(frame: Option<&[u8]>) -> Option<&'static str> {
 fn table_of_part(el: Node<'_>) -> Option<Node<'_>> {
     let some = Some(el);
     let mut p = el.parent();
-    let is_cell = named(some, b"td") || named(some, b"th");
+    let is_cell = some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Td))
+        || some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Th));
     if is_cell {
-        if !named(p, b"tr") {
+        if !p.is_some_and(|node| node.is_tag(southstar_dom::Tag::Tr)) {
             return None;
         }
         p = p.and_then(Node::parent);
     }
-    if (is_cell || named(some, b"tr"))
-        && (named(p, b"thead") || named(p, b"tbody") || named(p, b"tfoot"))
+    if (is_cell || some.is_some_and(|node| node.is_tag(southstar_dom::Tag::Tr)))
+        && (p.is_some_and(|node| node.is_tag(southstar_dom::Tag::Thead))
+            || p.is_some_and(|node| node.is_tag(southstar_dom::Tag::Tbody))
+            || p.is_some_and(|node| node.is_tag(southstar_dom::Tag::Tfoot)))
     {
         p = p.and_then(Node::parent);
     }
-    p.filter(|&p| named(Some(p), b"table"))
+    p.filter(|&p| p.is_tag(southstar_dom::Tag::Table))
 }
 
 fn img_dimension_source(img: Node<'_>) -> Node<'_> {
     let picture = img.parent();
-    if !named(picture, b"picture") {
+    if !picture.is_some_and(|node| node.is_tag(southstar_dom::Tag::Picture)) {
         return img;
     }
     let mut child = picture.and_then(Node::first_child);
     while let Some(c) = child.filter(|&c| c != img) {
         child = c.next_sibling();
-        if !named(Some(c), b"source") || non_empty(c, c"srcset").is_none() {
+        if !c.is_tag(southstar_dom::Tag::Source) || non_empty(c, c"srcset").is_none() {
             continue;
         }
         if non_empty(c, c"media").is_some_and(|media| !ffi::media_query_matches(media)) {
@@ -438,7 +441,7 @@ fn body_hints(out: &mut Vec<u8>, el: Node<'_>) {
     }
     let container = doc
         .and_then(Node::parent)
-        .filter(|&c| named(Some(c), b"iframe") || named(Some(c), b"frame"));
+        .filter(|&c| c.is_tag(southstar_dom::Tag::Iframe) || c.is_tag(southstar_dom::Tag::Frame));
     let margins = [
         ("margin-top", "margin-bottom", c"marginheight", c"topmargin"),
         ("margin-left", "margin-right", c"marginwidth", c"leftmargin"),
@@ -691,7 +694,10 @@ pub(crate) fn presentational_hints(el: Node<'_>) -> Option<Vec<u8>> {
             | b"colgroup"
             | b"frameset"
             | b"frame"
-    ) || (tag == b"img" && named(el.parent(), b"picture"))
+    ) || (tag == b"img"
+        && el
+            .parent()
+            .is_some_and(|node| node.is_tag(southstar_dom::Tag::Picture)))
         || el.attrs().any(|a| {
             a.name()
                 .is_some_and(|n| is_presentational_attr(n.to_bytes()))

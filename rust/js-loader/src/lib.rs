@@ -121,7 +121,7 @@ pub(crate) fn schedule_for(n: Node) -> Schedule {
 }
 
 pub(crate) fn link_has_pending_load(n: Node) -> bool {
-    if !ffi::is_named(n, c"link") || n.flags() & FLAG_LINK_LOAD_FIRED != 0 {
+    if !n.is_tag(southstar_dom::Tag::Link) || n.flags() & FLAG_LINK_LOAD_FIRED != 0 {
         return false;
     }
     let (Some(rel), Some(href)) = (n.attr(c"rel"), n.attr(c"href")) else {

@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* The remaining 330 checks of a node's name against a tag the HTML parser
+  knows compare tag ids instead of strings. Each crate's name helper
+  (`named`, `is_named`, `name_is`, `element_named`, ...) is gone where it
+  had no other callers; the checks call `Node::is_tag`, `is_html_tag` and
+  the new `is_tag_ignore_case`, `name_is_tag` and
+  `name_is_tag_ignore_case`, which keep the old helpers' semantics: the
+  name-only forms match any node kind, and the case-insensitive ones fall
+  back to comparing the name only when it is not a known tag.
 * A DOM node slot takes 184 bytes instead of 216. A template's contents,
   a script's source position and a document's id, class and tag indexes
   move into a box the slot allocates the first time it needs one, and the

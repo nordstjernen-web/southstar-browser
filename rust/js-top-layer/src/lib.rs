@@ -207,10 +207,6 @@ pub(crate) fn clear(js: Js) {
     }
 }
 
-pub(crate) fn is_named(n: Option<Element>, name: &[u8]) -> bool {
-    n.is_some_and(|n| n.element_name() == Some(name))
-}
-
 pub(crate) fn has_attr(n: Element, name: &CStr) -> bool {
     n.attr(name).is_some()
 }

@@ -7,8 +7,8 @@ use southstar_js_engine::{Attributes, ContextHandle, Scope, Value};
 
 use crate::ffi::{self, Js};
 use crate::{
-    Element, JsResult, get, is_document, is_named, message_of, nearest_document, set, truthy,
-    with_c_key, with_key,
+    Element, JsResult, get, is_document, message_of, nearest_document, set, truthy, with_c_key,
+    with_key,
 };
 
 pub(crate) const HANDLER_NAMES: &[&str] = &[
@@ -197,7 +197,7 @@ fn returned_false(scope: &mut Scope<'_>, value: &Value) -> bool {
 }
 
 pub(crate) fn is_window_handler_holder(node: Element) -> bool {
-    is_named(Some(node), b"body") || is_named(Some(node), b"frameset")
+    node.is_tag(southstar_dom::Tag::Body) || node.is_tag(southstar_dom::Tag::Frameset)
 }
 
 pub(crate) fn is_window_reflected(kind: &str) -> bool {

@@ -22,19 +22,15 @@ const SHOWN_URL: Attributes = Attributes {
     configurable: true,
 };
 
-fn named(node: Node<'_>, tag: &[u8]) -> bool {
-    node.element_name() == Some(tag)
-}
-
 fn is_frame_element(node: Node<'_>) -> bool {
-    named(node, b"iframe") || named(node, b"frame")
+    node.is_tag(southstar_dom::Tag::Iframe) || node.is_tag(southstar_dom::Tag::Frame)
 }
 
 fn is_frame_owner(node: Node<'_>) -> bool {
-    named(node, b"iframe")
-        || named(node, b"object")
-        || named(node, b"frame")
-        || named(node, b"embed")
+    node.is_tag(southstar_dom::Tag::Iframe)
+        || node.is_tag(southstar_dom::Tag::Object)
+        || node.is_tag(southstar_dom::Tag::Frame)
+        || node.is_tag(southstar_dom::Tag::Embed)
 }
 
 pub(crate) fn document_node(iframe: Node<'_>) -> Option<Node<'_>> {
@@ -155,7 +151,7 @@ pub fn content_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_element(this).filter(|node| is_frame_owner(*node)) else {
         return Err(scope.type_error("Illegal invocation"));
     };
-    if !is_frame_element(node) && !named(node, b"object") {
+    if !is_frame_element(node) && !node.is_tag(southstar_dom::Tag::Object) {
         return Ok(Value::null());
     }
     let js = Js::of_ctx(ffi::scope_ctx(scope));
@@ -189,7 +185,10 @@ pub fn svg_document(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsR
     let Some(node) = ffi::unwrap_element(this) else {
         return Ok(Value::null());
     };
-    if !named(node, b"iframe") && !named(node, b"object") && !named(node, b"embed") {
+    if !node.is_tag(southstar_dom::Tag::Iframe)
+        && !node.is_tag(southstar_dom::Tag::Object)
+        && !node.is_tag(southstar_dom::Tag::Embed)
+    {
         return Ok(Value::null());
     }
     let doc = content_document(scope, this)?;

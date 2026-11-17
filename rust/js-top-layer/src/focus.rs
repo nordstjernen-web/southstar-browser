@@ -10,7 +10,7 @@ use southstar_dom::{children, index};
 
 use crate::ffi::{self, Js};
 use crate::popover::{PopoverType, is_showing, type_of};
-use crate::{Element, MAX_DEPTH, has_attr, in_active_document, inclusive_ancestor, is_named};
+use crate::{Element, MAX_DEPTH, has_attr, in_active_document, inclusive_ancestor};
 
 pub(crate) fn run_focusing_steps(js: Js, el: Element) {
     if !in_active_document(js, el)
@@ -27,7 +27,7 @@ fn hides_focus_subtree(n: Element) -> bool {
     if has_attr(n, c"hidden") || n.is_html_tag(southstar_dom::Tag::Template) {
         return true;
     }
-    if is_named(Some(n), b"dialog") && !has_attr(n, c"open") {
+    if n.is_tag(southstar_dom::Tag::Dialog) && !has_attr(n, c"open") {
         return true;
     }
     type_of(Some(n)) != PopoverType::None && !is_showing(n)
@@ -74,7 +74,7 @@ fn first_sequentially_focusable(root: Element, depth: i32) -> Option<Element> {
 }
 
 pub(crate) fn popover_focusing_steps(js: Js, el: Element) {
-    if is_named(Some(el), b"dialog") {
+    if el.is_tag(southstar_dom::Tag::Dialog) {
         dialog_focusing_steps(js, el);
         return;
     }

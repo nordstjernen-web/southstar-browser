@@ -9,7 +9,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 use southstar_unicode::until_nul_owned;
 
 use crate::ffi::{self, Page};
-use crate::{Element, JsResult, named, text_is};
+use crate::{Element, JsResult, text_is};
 
 const LIVE_FORM_ELEMENTS: i32 = 9;
 const LIVE_RADIO_NODE_LIST: i32 = 11;
@@ -41,7 +41,7 @@ fn id_or_name_is(node: Element, name: &[u8]) -> bool {
 }
 
 fn is_radio_input(node: Option<Element>) -> bool {
-    node.is_some_and(|n| named(n, "input") && text_is(n.attr(c"type"), "radio"))
+    node.is_some_and(|n| n.is_tag(southstar_dom::Tag::Input) && text_is(n.attr(c"type"), "radio"))
 }
 
 fn radio_value(node: Element) -> &'static [u8] {

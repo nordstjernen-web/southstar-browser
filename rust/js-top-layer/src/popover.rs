@@ -10,7 +10,7 @@ use southstar_js_engine::{Scope, Value};
 use crate::ffi::{self, Js};
 use crate::{
     Element, JsResult, arg, flat_inclusive_ancestors, has_attr, inclusive_ancestor, info,
-    info_peek, is_flat_inclusive_descendant, is_html_element, is_named, peek, with,
+    info_peek, is_flat_inclusive_descendant, is_html_element, peek, with,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -83,7 +83,7 @@ pub(crate) fn validity(
     }
     if !crate::in_active_document(js, el)
         || expected_doc.is_some_and(|doc| el.root() != doc)
-        || (is_named(Some(el), b"dialog")
+        || (el.is_tag(southstar_dom::Tag::Dialog)
             && has_attr(el, c"open")
             && crate::dialog::is_modal(js, el))
     {
@@ -537,7 +537,7 @@ fn nearest_target(js: Js, node: Element) -> Option<Element> {
         if !c.is_element() {
             return None;
         }
-        let t = if is_named(Some(c), b"button") {
+        let t = if c.is_tag(southstar_dom::Tag::Button) {
             crate::invoker::button_target_popover(js, c)
         } else {
             crate::invoker::popover_target_element(js, c)
@@ -593,7 +593,7 @@ pub(crate) fn removing_steps(js: Js, el: Element) {
     if !crate::has_info(js, el) {
         return;
     }
-    if is_named(Some(el), b"dialog") {
+    if el.is_tag(southstar_dom::Tag::Dialog) {
         crate::dialog::removing_steps(js, el);
     }
     if is_showing(el) {
@@ -608,7 +608,7 @@ pub(crate) fn attr_changed(
     old_value: Option<&CStr>,
     new_value: Option<&CStr>,
 ) {
-    if attr.eq_ignore_ascii_case(b"open") && is_named(Some(el), b"dialog") {
+    if attr.eq_ignore_ascii_case(b"open") && el.is_tag(southstar_dom::Tag::Dialog) {
         if new_value.is_none() && old_value.is_some() {
             crate::dialog::close_watcher_remove(js, el);
         } else if new_value.is_some() && old_value.is_none() && crate::is_connected(el) {

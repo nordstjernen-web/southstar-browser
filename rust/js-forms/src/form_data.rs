@@ -11,8 +11,7 @@ use southstar_unicode::until_nul_owned;
 use crate::ffi;
 use crate::submit::is_submit_trigger;
 use crate::{
-    Element, JsResult, c_bytes, form_owner, index, length, name_is, named, non_empty, text_is,
-    text_is_any, type_of,
+    Element, JsResult, c_bytes, form_owner, index, length, non_empty, text_is, text_is_any, type_of,
 };
 
 const ITERATORS: &str = "(function(P,check){ function* walk(fd,kind){  for(var i=0;i<fd._entries.length;i++){   var e=fd._entries[i];   yield kind===0?[e[0],e[1]]:kind===1?e[0]:e[1];  } } function make(name,kind){  var f=({[name]:function(){check(this);return walk(this,kind);}})[name];  Object.defineProperty(f,'length',{value:0,configurable:true});  Object.defineProperty(P,name,{value:f,writable:true,enumerable:true,configurable:true});  return f; } var entries=make('entries',0); make('keys',1);make('values',2); Object.defineProperty(P,Symbol.iterator,{value:entries,writable:true,configurable:true});})";
@@ -317,10 +316,10 @@ fn option_disabled(option: Element) -> bool {
         return true;
     }
     for p in ancestors(option) {
-        if named(p, "select") {
+        if p.is_tag(southstar_dom::Tag::Select) {
             return false;
         }
-        if named(p, "optgroup") && p.attr(c"disabled").is_some() {
+        if p.is_tag(southstar_dom::Tag::Optgroup) && p.attr(c"disabled").is_some() {
             return true;
         }
     }
@@ -328,7 +327,9 @@ fn option_disabled(option: Element) -> bool {
 }
 
 fn option_selected(option: Element) -> bool {
-    named(option, "option") && option.attr(c"selected").is_some() && !option_disabled(option)
+    option.is_tag(southstar_dom::Tag::Option)
+        && option.attr(c"selected").is_some()
+        && !option_disabled(option)
 }
 
 fn append_option(scope: &mut Scope<'_>, fd: &Value, name: &[u8], option: Element) {
@@ -344,7 +345,7 @@ fn append_select(scope: &mut Scope<'_>, fd: &Value, select_el: Element, name: &[
         return;
     }
     for child in children(select_el) {
-        if named(child, "optgroup") {
+        if child.is_tag(southstar_dom::Tag::Optgroup) {
             if controls::effectively_disabled(child) || child.attr(c"disabled").is_some() {
                 continue;
             }
@@ -358,7 +359,8 @@ fn append_select(scope: &mut Scope<'_>, fd: &Value, select_el: Element, name: &[
 }
 
 fn append_submitter(scope: &mut Scope<'_>, fd: &Value, el: Element, name: Option<&[u8]>) {
-    let is_image = name_is(el, "input") && text_is(type_of(el), "image");
+    let is_image =
+        el.is_tag_ignore_case(southstar_dom::Tag::Input) && text_is(type_of(el), "image");
     if is_image {
         match name {
             Some(name) => {
@@ -380,7 +382,7 @@ fn append_submitter(scope: &mut Scope<'_>, fd: &Value, el: Element, name: Option
 
 fn populate(scope: &mut Scope<'_>, fd: &Value, form: Element, submitter: Option<Element>) {
     for el in crate::listed_controls(form, true) {
-        if name_is(el, "object") || controls::effectively_disabled(el) {
+        if el.is_tag_ignore_case(southstar_dom::Tag::Object) || controls::effectively_disabled(el) {
             continue;
         }
         if southstar_dom::internals::is_form_associated(el) {
@@ -389,8 +391,8 @@ fn populate(scope: &mut Scope<'_>, fd: &Value, form: Element, submitter: Option<
         }
         let name = non_empty(el.attr(c"name")).map(|n| n.to_bytes());
         let ty = type_of(el);
-        let is_button =
-            name_is(el, "button") || text_is_any(ty, &["submit", "button", "reset", "image"]);
+        let is_button = el.is_tag_ignore_case(southstar_dom::Tag::Button)
+            || text_is_any(ty, &["submit", "button", "reset", "image"]);
         if is_button {
             if Some(el) == submitter {
                 append_submitter(scope, fd, el, name);
@@ -405,11 +407,11 @@ fn populate(scope: &mut Scope<'_>, fd: &Value, form: Element, submitter: Option<
         if checkable && !controls::is_checked(el) {
             continue;
         }
-        if name_is(el, "select") {
+        if el.is_tag_ignore_case(southstar_dom::Tag::Select) {
             append_select(scope, fd, el, name);
             continue;
         }
-        let value = if name_is(el, "textarea") {
+        let value = if el.is_tag_ignore_case(southstar_dom::Tag::Textarea) {
             until_nul_owned(controls::textarea_value(Some(el)))
         } else {
             match controls::used_value(el) {

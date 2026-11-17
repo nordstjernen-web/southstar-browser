@@ -38,6 +38,6 @@ pub(crate) fn unsupported(node: Option<Node<'_>>) -> bool {
         return true;
     };
     node.flags() & (southstar_dom::FLAG_SVG_NS | southstar_dom::FLAG_FOREIGN_NS) != 0
-        || element_named(node, "svg")
-        || element_named(node, "math")
+        || node.is_tag(southstar_dom::Tag::Svg)
+        || node.is_tag(southstar_dom::Tag::Math)
 }

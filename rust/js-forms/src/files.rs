@@ -8,7 +8,7 @@ use southstar_unicode::until_nul_owned;
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::{JsResult, ffi, named, text_is};
+use crate::{JsResult, ffi, text_is};
 
 const CACHE_SLOT: Attributes = Attributes {
     writable: true,
@@ -64,7 +64,7 @@ fn make_file(scope: &mut Scope<'_>, path: &CStr) -> JsResult<Option<Value>> {
 }
 
 pub fn get_files(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
-    let Some(input) = ffi::element(this).filter(|n| named(*n, "input")) else {
+    let Some(input) = ffi::element(this).filter(|n| (*n).is_tag(southstar_dom::Tag::Input)) else {
         return Ok(Value::null());
     };
     if !text_is(input.attr(c"type"), "file") {

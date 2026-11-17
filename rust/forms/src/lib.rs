@@ -29,10 +29,6 @@ fn type_is_any(ty: Option<&CStr>, names: &[&str]) -> bool {
     names.iter().any(|name| type_is(ty, name))
 }
 
-fn is_named(node: Node, tag: &[u8]) -> bool {
-    node.element_name() == Some(tag)
-}
-
 fn or_empty(value: Option<&CStr>) -> &CStr {
     value.unwrap_or(c"")
 }
@@ -72,10 +68,10 @@ fn option_disabled(option: Node) -> bool {
         return true;
     }
     for p in ancestors(option).take(MAX_DEPTH as usize) {
-        if is_named(p, b"select") {
+        if p.is_tag(southstar_dom::Tag::Select) {
             return false;
         }
-        if is_named(p, b"optgroup") && p.attr(c"disabled").is_some() {
+        if p.is_tag(southstar_dom::Tag::Optgroup) && p.attr(c"disabled").is_some() {
             return true;
         }
     }
@@ -83,7 +79,9 @@ fn option_disabled(option: Node) -> bool {
 }
 
 fn selected_option_node(option: Node) -> bool {
-    is_named(option, b"option") && option.attr(c"selected").is_some() && !option_disabled(option)
+    option.is_tag(southstar_dom::Tag::Option)
+        && option.attr(c"selected").is_some()
+        && !option_disabled(option)
 }
 
 fn selected_options(select: Node) -> Vec<Node> {
@@ -95,7 +93,7 @@ fn selected_options(select: Node) -> Vec<Node> {
     }
     let mut out = Vec::new();
     for child in children(select) {
-        if is_named(child, b"optgroup") {
+        if child.is_tag(southstar_dom::Tag::Optgroup) {
             if controls::effectively_disabled(child) || child.attr(c"disabled").is_some() {
                 continue;
             }
