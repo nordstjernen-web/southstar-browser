@@ -6,6 +6,7 @@
 use std::collections::HashSet;
 
 use crate::charref;
+use crate::scan::{find_any, newlines};
 use crate::tags::{AttrNs, Tag};
 use crate::{Attribute, Position};
 
@@ -268,11 +269,10 @@ impl<'a> Tokenizer<'a> {
     fn position_at(&mut self, offset: usize) -> Position {
         let offset = offset.min(self.input.len());
         if offset >= self.line_scan {
-            for (i, &c) in self.input[self.line_scan..offset].iter().enumerate() {
-                if c == b'\n' {
-                    self.line += 1;
-                    self.line_start = self.line_scan + i + 1;
-                }
+            let (count, last) = newlines(&self.input[self.line_scan..offset]);
+            self.line += count as u32;
+            if let Some(i) = last {
+                self.line_start = self.line_scan + i + 1;
             }
             self.line_scan = offset;
         }
@@ -517,9 +517,7 @@ impl<'a> Tokenizer<'a> {
 
     fn data(&mut self) -> Option<Kind> {
         let start = self.pos;
-        let found = self.input[start..]
-            .iter()
-            .position(|&b| b == b'<' || b == b'&');
+        let found = find_any(&self.input[start..], *b"<&");
         let Some(i) = found else {
             self.push_input(start, self.input.len());
             return self.eof();
@@ -537,9 +535,7 @@ impl<'a> Tokenizer<'a> {
 
     fn rcdata(&mut self) -> Option<Kind> {
         let start = self.pos;
-        let found = self.input[start..]
-            .iter()
-            .position(|&b| b == b'<' || b == b'&' || b == 0);
+        let found = find_any(&self.input[start..], [b'<', b'&', 0]);
         let Some(i) = found else {
             self.push_input(start, self.input.len());
             return self.eof();
@@ -570,9 +566,7 @@ impl<'a> Tokenizer<'a> {
 
     fn rawtext(&mut self) -> Option<Kind> {
         let start = self.pos;
-        let found = self.input[start..]
-            .iter()
-            .position(|&b| b == b'<' || b == 0);
+        let found = find_any(&self.input[start..], [b'<', 0]);
         let Some(i) = found else {
             self.push_input(start, self.input.len());
             return self.eof();
@@ -590,9 +584,7 @@ impl<'a> Tokenizer<'a> {
 
     fn script_data(&mut self) -> Option<Kind> {
         let start = self.pos;
-        let found = self.input[start..]
-            .iter()
-            .position(|&b| b == b'<' || b == 0);
+        let found = find_any(&self.input[start..], [b'<', 0]);
         let Some(i) = found else {
             self.push_input(start, self.input.len());
             return self.eof();
@@ -614,7 +606,7 @@ impl<'a> Tokenizer<'a> {
 
     fn plaintext(&mut self) -> Option<Kind> {
         let start = self.pos;
-        match self.input[start..].iter().position(|&b| b == 0) {
+        match find_any(&self.input[start..], [0]) {
             None => {
                 self.push_input(start, self.input.len());
                 self.eof()
@@ -939,9 +931,7 @@ impl<'a> Tokenizer<'a> {
     fn attr_value_quoted(&mut self, quote: u8) -> Option<Kind> {
         loop {
             let start = self.pos;
-            let found = self.input[start..]
-                .iter()
-                .position(|&b| b == quote || b == b'&' || b == 0);
+            let found = find_any(&self.input[start..], [quote, b'&', 0]);
             let Some(i) = found else {
                 return self.eof();
             };
@@ -1049,9 +1039,7 @@ impl<'a> Tokenizer<'a> {
     fn bogus_comment(&mut self) -> Option<Kind> {
         loop {
             let start = self.pos;
-            let found = self.input[start..]
-                .iter()
-                .position(|&b| b == b'>' || b == 0);
+            let found = find_any(&self.input[start..], [b'>', 0]);
             let Some(i) = found else {
                 self.comment.extend_from_slice(&self.input[start..]);
                 return self.emit_comment_then_eof();
@@ -1093,9 +1081,7 @@ impl<'a> Tokenizer<'a> {
     fn comment_states(&mut self) -> Option<Kind> {
         if self.state == State::Comment {
             let start = self.pos;
-            let found = self.input[start..]
-                .iter()
-                .position(|&b| b == b'<' || b == b'-' || b == 0);
+            let found = find_any(&self.input[start..], [b'<', b'-', 0]);
             let Some(i) = found else {
                 self.comment.extend_from_slice(&self.input[start..]);
                 return self.emit_comment_then_eof();
@@ -1449,7 +1435,7 @@ impl<'a> Tokenizer<'a> {
                 None => return self.emit_doctype_then_eof(true),
                 Some(_) => self.state = State::BogusDoctype,
             },
-            _ => match self.input[self.pos..].iter().position(|&b| b == b'>') {
+            _ => match find_any(&self.input[self.pos..], *b">") {
                 Some(i) => {
                     self.pos += i + 1;
                     return self.emit_doctype();
@@ -1522,9 +1508,7 @@ impl<'a> Tokenizer<'a> {
             },
             State::PiData => {
                 let start = self.pos;
-                let found = self.input[start..]
-                    .iter()
-                    .position(|&b| b == b'?' || b == b'>');
+                let found = find_any(&self.input[start..], *b"?>");
                 let Some(i) = found else {
                     return self.eof();
                 };
