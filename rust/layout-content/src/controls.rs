@@ -1,4 +1,4 @@
-//! Southstar — form-control sizing and chrome, the inline attributes emitted for controls and styled runs, and the meter and progress states.
+//! Southstar — form-control sizing and chrome and the inline attributes emitted for controls and styled runs.
 //!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
@@ -7,6 +7,7 @@ use core::ffi::{CStr, c_int, c_uint};
 use core::ptr;
 
 use southstar_dom::Node;
+pub use southstar_dom::controls::{meter_state, progress_fraction};
 use southstar_glib::{max as c_max, min as c_min};
 use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_geom::{edges_from_style, length_resolve};
@@ -640,10 +641,6 @@ pub fn font_keyword(s: Option<StyleRef<'_>>, which: FontKeyword) -> Option<&CStr
     get(s, prop).and_then(ValueRef::keyword_text)
 }
 
-fn float_attr(n: Node<'_>, name: &CStr) -> Option<f64> {
-    southstar_html_util::parse_float(n.attr(name)?.to_bytes())
-}
-
 fn textarea_extent(d: Node<'_>) -> (c_int, c_int) {
     let value = southstar_dom::controls::textarea_value(Some(d));
     let text = if value.is_empty() {
@@ -661,60 +658,4 @@ fn textarea_extent(d: Node<'_>) -> (c_int, c_int) {
     let cols = c_int::try_from(widest + 1).unwrap_or(c_int::MAX).max(2);
     let rows = c_int::try_from(lines.len()).unwrap_or(c_int::MAX).max(1);
     (cols, rows)
-}
-
-pub fn progress_fraction(n: Option<Node<'_>>) -> f64 {
-    let attr = |name: &CStr| n.and_then(|n| float_attr(n, name));
-    let max = attr(c"max").filter(|&v| v > 0.0).unwrap_or(1.0);
-    if n.and_then(|n| n.attr(c"value")).is_none() {
-        return -1.0;
-    }
-    let mut value = attr(c"value").filter(|&v| v > 0.0).unwrap_or(0.0);
-    if value > max {
-        value = max;
-    }
-    if max > 0.0 { value / max } else { 0.0 }
-}
-
-pub fn meter_state(n: Option<Node<'_>>) -> (f64, c_int) {
-    let attr = |name: &CStr| n.and_then(|n| float_attr(n, name));
-    let min = attr(c"min").unwrap_or(0.0);
-    let candidate_max = attr(c"max").unwrap_or(1.0);
-    let max = if candidate_max >= min {
-        candidate_max
-    } else {
-        min
-    };
-    let clamp = |v: f64, lo: f64, hi: f64| {
-        let v = if v < lo { lo } else { v };
-        if v > hi { hi } else { v }
-    };
-    let value = clamp(attr(c"value").unwrap_or(0.0), min, max);
-    let low = clamp(attr(c"low").unwrap_or(min), min, max);
-    let high = clamp(attr(c"high").unwrap_or(max), low, max);
-    let midpoint = min + (max - min) / 2.0;
-    let optimum = clamp(attr(c"optimum").unwrap_or(midpoint), min, max);
-    let frac = if max > min {
-        (value - min) / (max - min)
-    } else {
-        1.0
-    };
-    let quality = if optimum >= low && optimum <= high {
-        if value >= low && value <= high { 0 } else { 1 }
-    } else if optimum < low {
-        if value < low {
-            0
-        } else if value <= high {
-            1
-        } else {
-            2
-        }
-    } else if value > high {
-        0
-    } else if value >= low {
-        1
-    } else {
-        2
-    };
-    (frac, quality)
 }

@@ -58,9 +58,9 @@ const ORIGIN_AUTHOR: c_int = 2;
 const NODE_QUIRKS: u32 = 1 << 5;
 const PE_BEFORE: c_uint = 1;
 const PE_AFTER: c_uint = 2;
-const PSEUDO_ELEMENTS: [c_uint; 9] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-const HIDDEN_BEFORE: usize = 9;
-const HIDDEN_AFTER: usize = 10;
+const PSEUDO_ELEMENTS: [c_uint; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const HIDDEN_BEFORE: usize = 10;
+const HIDDEN_AFTER: usize = 11;
 
 fn pseudo_slot(pe: c_uint) -> usize {
     match pe {
@@ -72,7 +72,8 @@ fn pseudo_slot(pe: c_uint) -> usize {
         5 => 5,
         6 => 6,
         7 => 7,
-        _ => 8,
+        9 => 8,
+        _ => 9,
     }
 }
 
@@ -332,7 +333,7 @@ impl<'a> Walk<'a> {
         let mask = author.iter().fold(pseudo_mask(self.ua), |mask, &sheet| {
             mask | pseudo_mask(sheet)
         });
-        let mut pes = [0; 10];
+        let mut pes = [0; PSEUDO_ELEMENTS.len() + 1];
         let mut n = 1;
         if mask != 0 {
             for pe in PSEUDO_ELEMENTS {

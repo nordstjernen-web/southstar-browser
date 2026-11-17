@@ -83,11 +83,7 @@ impl<'a> Collector<'a> {
         self.push_repeat(NBSP, 12);
         let (frac, rgba) = if is_meter {
             let (frac, quality) = meter_state(Some(n));
-            let rgb = match quality {
-                0 => [0x2e, 0x9d, 0x54],
-                1 => [0xd0, 0xa4, 0x1f],
-                _ => [0xc4, 0x43, 0x3c],
-            };
+            let rgb = southstar_paint::meter_quality_rgb(quality);
             (frac, [rgb[0], rgb[1], rgb[2], 255])
         } else {
             (progress_fraction(Some(n)), [0, 0, 0, 0])

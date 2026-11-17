@@ -356,8 +356,9 @@ const SELECTION: usize = 5;
 const MARKER: usize = 6;
 const BACKDROP: usize = 7;
 const FILE_SELECTOR_BUTTON: usize = 8;
-const HIDDEN_BEFORE: usize = 9;
-const HIDDEN_AFTER: usize = 10;
+const PROGRESS_VALUE: usize = 9;
+const HIDDEN_BEFORE: usize = 10;
+const HIDDEN_AFTER: usize = 11;
 
 impl<'a> StyleRef<'a> {
     pub fn as_ptr(self) -> *const Style {
@@ -461,6 +462,10 @@ impl<'a> StyleRef<'a> {
 
     pub fn file_selector_button(self) -> Option<StyleRef<'a>> {
         self.pseudo(FILE_SELECTOR_BUTTON)
+    }
+
+    pub fn progress_value(self) -> Option<StyleRef<'a>> {
+        self.pseudo(PROGRESS_VALUE)
     }
 
     pub fn hidden_before(self) -> Option<StyleRef<'a>> {
@@ -592,7 +597,7 @@ pub fn styles_equal(a: Option<StyleRef<'_>>, b: Option<StyleRef<'_>>) -> bool {
         return false;
     }
     vars_equal(a, b)
-        && (BEFORE..=FILE_SELECTOR_BUTTON).all(|slot| styles_equal(a.pseudo(slot), b.pseudo(slot)))
+        && (BEFORE..=PROGRESS_VALUE).all(|slot| styles_equal(a.pseudo(slot), b.pseudo(slot)))
 }
 
 pub fn font_family_for_pango(family: &CStr) -> CString {

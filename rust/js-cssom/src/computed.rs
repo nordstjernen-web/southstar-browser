@@ -1795,6 +1795,7 @@ fn pseudo_substyle<'a>(s: StyleRef<'a>, pseudo: &str) -> Option<StyleRef<'a>> {
         "selection" => s.selection(),
         "backdrop" => s.backdrop(),
         "file-selector-button" => s.file_selector_button(),
+        "-webkit-progress-value" | "-moz-progress-bar" => s.progress_value(),
         _ => None,
     }
 }
