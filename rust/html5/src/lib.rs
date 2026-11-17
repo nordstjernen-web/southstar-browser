@@ -8,6 +8,7 @@
 mod charref;
 mod entities;
 mod quirks;
+mod stack;
 mod tags;
 mod tokenizer;
 mod tree;
