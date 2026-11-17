@@ -3,6 +3,20 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* The HTML parser has no quadratic paths left on deeply nested or
+  misnested markup. The fix earlier in this release covered the scope
+  checks; a sweep of every tag against 24 kinds of deep stack found more
+  slow paths:
+  `<rt>` or `<option>` under a deeply buried `<ruby>` or `<select>`,
+  repeated `</body>`, end tags for custom elements or inside deep SVG and
+  MathML, thousands of distinct open formatting elements, `<a>` after
+  them and an adoption agency run across them. Half a megabyte of such
+  markup took 3 to 22 seconds and now takes 10 to 50 ms. Parsed trees are
+  unchanged.
+* Named character references are found with one lookup among the names
+  that share their first letter, instead of a search of the whole table
+  for every prefix of the name: text full of entities parses 1.7 times
+  faster.
 * The HTML parser stays fast on deeply nested markup. Every block start
   tag, every reconstruction of formatting elements and every run of
   foster-parented text searched the whole stack of open elements, so
