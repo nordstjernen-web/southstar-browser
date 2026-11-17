@@ -76,8 +76,7 @@ pub(crate) fn has_dataset(node: Element) -> bool {
     if flags & FLAG_SVG_NS != 0 || flags & FLAG_FOREIGN_NS == 0 {
         return true;
     }
-    node.attr(c"data-nd-ns-uri")
-        .is_some_and(|ns| ns.to_bytes() == MATHML_NS)
+    southstar_dom::attrs::stored_namespace(node).is_some_and(|ns| ns.to_bytes() == MATHML_NS)
 }
 
 pub(crate) fn named_value(node: Element, prop: &[u8]) -> Option<&'static CStr> {

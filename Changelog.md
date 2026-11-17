@@ -3,6 +3,22 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* A DOM node slot takes 184 bytes instead of 216. A template's contents,
+  a script's source position and a document's id, class and tag indexes
+  move into a box the slot allocates the first time it needs one, and the
+  per-node pointer to the JavaScript wrapper's invalidation function
+  becomes a flag bit. Elements also know their tag as a
+  `southstar_html5::Tag` (`Node::tag`, `is_tag`, `is_html_tag`), set
+  wherever the name is, and the 48 places that compared an element's name
+  with a tag the parser knows compare the tag instead. SVG and MathML
+  elements no longer carry their namespace as a hidden attribute: MathML
+  gets its own flag bit next to SVG's, and only elements in other
+  namespaces keep the URI. A `<template>` inside `<svg>` or `<math>` is no
+  longer treated as an HTML template: it has no `content` fragment and
+  tree walks no longer skip its children, as in other browsers; that makes
+  the html5lib `template.dat` case for it pass in web-platform-tests (it
+  runs three ways) and `domparsing/svg-template.html`. The same changes
+  are in Nordstjernen.
 * The HTML parser takes its input in pieces, and a page's HTML is parsed
   while it downloads. `southstar_html5::Parser` is fed chunks and
   resumed: the tokenizer suspends wherever more input could still change

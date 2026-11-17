@@ -227,7 +227,7 @@ fn first_submit_button_for<'a>(scan: Node<'a>, owner: Node<'a>, depth: i32) -> O
     {
         return Some(scan);
     }
-    if named(Some(scan), b"template") {
+    if scan.is_html_tag(southstar_dom::Tag::Template) {
         return None;
     }
     children(scan).find_map(|c| first_submit_button_for(c, owner, depth + 1))
@@ -269,7 +269,7 @@ fn radio_group_has_checked(
     {
         return true;
     }
-    if named(Some(scan), b"template") {
+    if scan.is_html_tag(southstar_dom::Tag::Template) {
         return false;
     }
     children(scan).any(|c| radio_group_has_checked(c, owner, name, depth + 1))
@@ -350,7 +350,7 @@ fn has_target_within(el: Node<'_>, fragment: &[u8], depth: i32) -> bool {
     if el.is_element() && is_target(el, fragment) {
         return true;
     }
-    if named(Some(el), b"template") {
+    if el.is_html_tag(southstar_dom::Tag::Template) {
         return false;
     }
     children(el).any(|c| has_target_within(c, fragment, depth + 1))

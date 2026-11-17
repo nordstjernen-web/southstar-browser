@@ -45,7 +45,7 @@ fn node_document(scope: &mut Scope<'_>, js: Js, node: Element) -> Option<Element
 
 fn in_template_content(node: Element) -> bool {
     southstar_dom::ancestors_and_self(node).any(|p| {
-        p.flags() & FLAG_TEMPLATE_CONTENT != 0 || p.element_name() == Some(b"template".as_slice())
+        p.flags() & FLAG_TEMPLATE_CONTENT != 0 || p.is_html_tag(southstar_dom::Tag::Template)
     })
 }
 

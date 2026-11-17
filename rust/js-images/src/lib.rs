@@ -227,7 +227,7 @@ pub(crate) fn fire_load_once(js: Js, node: Element, failed: bool) {
         return;
     }
     node.add_flags(IMG_LOAD_FIRED);
-    if node.element_name() == Some(b"img")
+    if node.is_tag(southstar_dom::Tag::Img)
         && let Some(img) = image_of(js, node)
     {
         ffi::record_image_timing(js, node, img);
@@ -293,7 +293,7 @@ fn rescan_subtree(js: Js, root: Element, depth: usize) {
     if depth >= MAX_DEPTH {
         return;
     }
-    if root.element_name() == Some(b"img")
+    if root.is_tag(southstar_dom::Tag::Img)
         && let Some(src) = nonempty(root.attr(c"src"))
         && let Some(load) = lookup(js, root)
         && let Some(abs_url) = ffi::base_url(js, root).and_then(|base| ffi::url_resolve(&base, src))

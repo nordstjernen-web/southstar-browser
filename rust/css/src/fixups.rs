@@ -70,7 +70,7 @@ pub(crate) fn cannot_be_unboxed(el: Node) -> bool {
 }
 
 pub(crate) fn is_native_toggle(el: Node) -> bool {
-    el.element_name() == Some(b"input")
+    el.is_tag(southstar_dom::Tag::Input)
         && el.attr(c"type").is_some_and(|ty| {
             let ty = ty.to_bytes();
             ty.eq_ignore_ascii_case(b"checkbox") || ty.eq_ignore_ascii_case(b"radio")

@@ -175,13 +175,13 @@ pub fn replace_with(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
 fn select_option_at(select: Element, index: i32) -> Option<Element> {
     let mut i = 0;
     for c in children(select) {
-        if c.element_name() == Some(b"option") {
+        if c.is_tag(southstar_dom::Tag::Option) {
             if i == index {
                 return Some(c);
             }
             i += 1;
-        } else if c.element_name() == Some(b"optgroup") {
-            for option in children(c).filter(|cc| cc.element_name() == Some(b"option")) {
+        } else if c.is_tag(southstar_dom::Tag::Optgroup) {
+            for option in children(c).filter(|cc| cc.is_tag(southstar_dom::Tag::Option)) {
                 if i == index {
                     return Some(option);
                 }
@@ -195,7 +195,7 @@ fn select_option_at(select: Element, index: i32) -> Option<Element> {
 pub fn remove(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let node = ffi::unwrap_node(this);
     let js = ffi::js_of(scope);
-    if let Some(select) = node.filter(|n| n.element_name() == Some(b"select"))
+    if let Some(select) = node.filter(|n| n.is_tag(southstar_dom::Tag::Select))
         && args.first().is_some_and(|a| !a.is_undefined())
     {
         let index = scope.to_int32(&args[0])?;

@@ -460,7 +460,7 @@ impl<'a> Collector<'a> {
                         self.push(NBSP);
                     }
                     for o in children(c) {
-                        if o.element_name() == Some(b"option") {
+                        if o.is_tag(southstar_dom::Tag::Option) {
                             self.open_option(o);
                         }
                     }

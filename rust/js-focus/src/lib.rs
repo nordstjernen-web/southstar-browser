@@ -161,6 +161,7 @@ pub(crate) fn inclusive_ancestor(root: Option<Element>, desc: Option<Element>) -
 }
 
 pub(crate) fn in_template_content(n: Element) -> bool {
-    ancestors_and_self(n)
-        .any(|p| p.flags() & FLAG_TEMPLATE_CONTENT != 0 || is_named(Some(p), b"template"))
+    ancestors_and_self(n).any(|p| {
+        p.flags() & FLAG_TEMPLATE_CONTENT != 0 || p.is_html_tag(southstar_dom::Tag::Template)
+    })
 }

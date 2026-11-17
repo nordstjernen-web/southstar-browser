@@ -16,7 +16,7 @@ fn find_map<'a>(n: Node<'a>, name: &[u8], depth: i32) -> Option<Node<'a>> {
     if depth >= MAX_DEPTH {
         return None;
     }
-    if n.element_name() == Some(b"map") {
+    if n.is_tag(southstar_dom::Tag::Map) {
         let named = |attr: &CStr| n.attr(attr).is_some_and(|v| v.to_bytes() == name);
         if named(c"id") || named(c"name") {
             return Some(n);
@@ -159,7 +159,7 @@ fn area_in(n: Node<'_>, x: f64, y: f64, width: f64, height: f64, depth: i32) -> 
         return None;
     }
     children(n).filter(|c| c.is_element()).find_map(|c| {
-        if c.element_name() == Some(b"area") && area_contains(c, x, y, width, height) {
+        if c.is_tag(southstar_dom::Tag::Area) && area_contains(c, x, y, width, height) {
             Some(c)
         } else {
             area_in(c, x, y, width, height, depth + 1)

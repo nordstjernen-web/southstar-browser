@@ -67,7 +67,7 @@ fn resolve_src(js: Js, element: Element) -> Option<String> {
         .filter(|src| nonempty(src))
         .or_else(|| {
             core::iter::successors(element.first_child(), |child| child.next_sibling())
-                .filter(|child| child.element_name() == Some(b"source"))
+                .filter(|child| child.is_tag(southstar_dom::Tag::Source))
                 .find_map(|child| child.attr(c"src").filter(|src| nonempty(src)))
         })?;
     let src = src.to_string_lossy();

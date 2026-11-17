@@ -251,7 +251,7 @@ fn fetch_source(
         decoded: None,
         resp: None,
     };
-    let kind = if iframe.element_name() == Some(b"object") {
+    let kind = if iframe.is_tag(southstar_dom::Tag::Object) {
         FrameKind::Object
     } else {
         FrameKind::Frame
@@ -283,7 +283,7 @@ fn fetch_source(
         let info = load::element_perf_info(js, iframe);
         let initiator: &CStr = match kind {
             FrameKind::Object => c"object",
-            FrameKind::Frame if iframe.element_name() == Some(b"frame") => c"frame",
+            FrameKind::Frame if iframe.is_tag(southstar_dom::Tag::Frame) => c"frame",
             FrameKind::Frame => c"iframe",
         };
         load::add_resource_timing(
@@ -678,7 +678,7 @@ fn meta_policy(root: Node<'_>) -> Option<Csp> {
         if node.kind() == Kind::Document {
             continue;
         }
-        let is_policy = node.element_name() == Some(b"meta")
+        let is_policy = node.is_tag(southstar_dom::Tag::Meta)
             && node.attr(c"http-equiv").is_some_and(|name| {
                 name.to_bytes()
                     .eq_ignore_ascii_case(b"content-security-policy")
@@ -785,7 +785,7 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
     page::update_frame(js, frame_of(iframe), |entry| entry.policy = policy);
     let content_type = resp.as_ref().and_then(Response::content_type);
 
-    if iframe.element_name() == Some(b"object") {
+    if iframe.is_tag(southstar_dom::Tag::Object) {
         let doc_type = content_type.is_some_and(|ct| contains(ct, b"html") || contains(ct, b"xml"));
         if !doc_type {
             return;

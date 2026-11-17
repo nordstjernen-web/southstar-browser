@@ -13,7 +13,6 @@ use crate::{Element, FLAG_CDATA, FLAG_FRAGMENT};
 
 const FLAG_KEEP_CASE: u32 = 1 << 12;
 const FLAG_XML_DOC: u32 = 1 << 14;
-const NS_URI_ATTR: &CStr = c"data-nd-ns-uri";
 const NS_PREFIX_ATTR: &CStr = c"data-nd-ns-prefix";
 const SVG_NS: &[u8] = b"http://www.w3.org/2000/svg";
 const XHTML_NS: &[u8] = b"http://www.w3.org/1999/xhtml";
@@ -75,7 +74,7 @@ pub(crate) fn namespace_uri(node: Element) -> Option<&'static [u8]> {
     if !node.is_element() {
         return None;
     }
-    if let Some(stored) = node.attr(NS_URI_ATTR) {
+    if let Some(stored) = southstar_dom::attrs::stored_namespace(node) {
         return Some(stored.to_bytes());
     }
     if node.flags() & FLAG_SVG_NS != 0 {
@@ -164,7 +163,7 @@ pub(crate) fn tag_name(node: Option<Element>, doc_is_xml: impl FnOnce() -> bool)
 }
 
 fn namespaced_name(node: Element) -> Option<(&'static [u8], &'static [u8])> {
-    if !foreign(node) || node.attr(NS_URI_ATTR).is_none() {
+    if !foreign(node) || southstar_dom::attrs::stored_namespace(node).is_none() {
         return None;
     }
     split_colon(bytes(node.name())?)
@@ -201,7 +200,7 @@ pub fn prefix_of(node: Option<Element>) -> Text<'static> {
 pub fn namespace_uri_of(node: Option<Element>) -> Text<'static> {
     if let Some(stored) = node
         .filter(|n| n.is_element())
-        .and_then(|n| n.attr(NS_URI_ATTR))
+        .and_then(|n| southstar_dom::attrs::stored_namespace(n))
     {
         return Text::Plain(stored.to_bytes());
     }

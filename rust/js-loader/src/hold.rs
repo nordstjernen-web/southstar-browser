@@ -9,7 +9,7 @@ use std::collections::HashSet;
 
 use southstar_dom::{Kind, MAX_DEPTH, Node, WeakNode};
 
-use crate::ffi::{self, Js, hidden_child, is_named};
+use crate::ffi::{self, Js, hidden_child};
 use crate::{Schedule, Task, fetch, page};
 
 #[derive(Clone, Copy)]
@@ -71,7 +71,7 @@ fn collect(hold: &mut Hold, parent: Node, n: Node, depth: i32) {
     });
     hold.members.insert(parent);
     hold.members.insert(held);
-    if depth >= MAX_DEPTH || is_named(n, c"template") {
+    if depth >= MAX_DEPTH || n.is_html_tag(southstar_dom::Tag::Template) {
         return;
     }
     for c in southstar_dom::children(n) {

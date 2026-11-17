@@ -3,14 +3,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::RefCell;
+use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::ptr;
 
-use crate::Tree;
 use crate::data::{
     AttrSlot, Invalidator, Kind, Name, Namespaced, NewAttr, NodeSlot, NsNode, NulString,
 };
@@ -18,6 +17,7 @@ use crate::index::Indexes;
 use crate::node::{KIND_COMMENT, KIND_DOCTYPE, KIND_DOCUMENT, KIND_ELEMENT, KIND_TEXT};
 use crate::reclaim;
 use crate::store::{self, WeakNode};
+use crate::{FLAG_FOREIGN_NS, FLAG_JS_ARMED, FLAG_SVG_NS, Tag, Tree};
 
 #[derive(Clone, Copy)]
 pub struct Node<'a> {
@@ -145,7 +145,27 @@ impl<'a> Node<'a> {
     }
 
     pub fn set_name(self, name: &[u8]) {
-        reclaim::retire_name(self.slot.replace_name(Some(Name::new(name))));
+        let name = Name::new(name);
+        self.slot
+            .tag
+            .set(Tag::from_bytes(name.as_c_str().to_bytes()));
+        reclaim::retire_name(self.slot.replace_name(Some(name)));
+    }
+
+    pub fn tag(self) -> Tag {
+        if self.is_element() {
+            self.slot.tag.get()
+        } else {
+            Tag::Other
+        }
+    }
+
+    pub fn is_tag(self, tag: Tag) -> bool {
+        tag != Tag::Other && self.is_element() && self.slot.tag.get() == tag
+    }
+
+    pub fn is_html_tag(self, tag: Tag) -> bool {
+        self.is_tag(tag) && self.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0
     }
 
     pub fn text(self) -> Option<&'a CStr> {
@@ -199,15 +219,21 @@ impl<'a> Node<'a> {
     }
 
     pub fn tpl_content(self) -> Option<Self> {
-        Self::link(self.slot.template_content.get())
+        Self::link(self.slot.rare()?.template_content.get())
     }
 
     pub fn set_tpl_content(self, content: Option<Node>) {
-        self.slot.template_content.set(content.map(Node::slot));
+        let rare = match content {
+            Some(_) => Some(self.slot.rare_or_init()),
+            None => self.slot.rare(),
+        };
+        if let Some(rare) = rare {
+            rare.template_content.set(content.map(Node::slot));
+        }
     }
 
     pub fn take_tpl_content(self) -> Option<Tree> {
-        Self::link(self.slot.template_content.take()).map(Tree::adopt)
+        Self::link(self.slot.rare()?.template_content.take()).map(Tree::adopt)
     }
 
     pub fn attr(self, name: &CStr) -> Option<&'a CStr> {
@@ -267,8 +293,12 @@ impl<'a> Node<'a> {
         self.slot.class_tokens.replace(Some(tokens));
     }
 
-    pub(crate) fn indexes(self) -> &'a RefCell<Option<Box<Indexes>>> {
-        &self.slot.indexes
+    pub(crate) fn indexes(self) -> Option<&'a RefCell<Option<Indexes>>> {
+        self.slot.rare().map(|rare| &rare.indexes)
+    }
+
+    pub(crate) fn indexes_or_init(self) -> &'a RefCell<Option<Indexes>> {
+        &self.slot.rare_or_init().indexes
     }
 
     pub fn has_js_wrapper(self) -> bool {
@@ -284,19 +314,30 @@ impl<'a> Node<'a> {
     }
 
     pub fn js_invalidate(self) -> Invalidator {
-        self.slot.js_invalidate.get()
+        if self.flags() & FLAG_JS_ARMED == 0 {
+            return None;
+        }
+        JS_INVALIDATOR.with(Cell::get)
     }
 
     pub fn set_js_invalidate(self, invalidate: Invalidator) {
-        self.slot.js_invalidate.set(invalidate);
+        match invalidate {
+            Some(invalidate) => {
+                JS_INVALIDATOR.with(|cell| cell.set(Some(invalidate)));
+                self.add_flags(FLAG_JS_ARMED);
+            }
+            None => self.remove_flags(FLAG_JS_ARMED),
+        }
     }
 
     pub fn set_source_position(self, line: c_int, col: c_int) {
-        self.slot.source_position.set((line, col));
+        self.slot.rare_or_init().source_position.set((line, col));
     }
 
     pub fn source_position(self) -> (c_int, c_int) {
-        self.slot.source_position.get()
+        self.slot
+            .rare()
+            .map_or((0, 0), |rare| rare.source_position.get())
     }
 
     pub fn detach(self) {
@@ -366,7 +407,7 @@ impl<'a> Node<'a> {
         self.detach();
         let mut stack = vec![self.slot];
         while let Some(&cur) = stack.last() {
-            if let Some(content) = cur.template_content.take() {
+            if let Some(content) = cur.rare().and_then(|rare| rare.template_content.take()) {
                 stack.push(content);
                 continue;
             }
@@ -388,10 +429,16 @@ impl<'a> Node<'a> {
 }
 
 fn release(slot: &'static NodeSlot) {
-    if let Some(invalidate) = slot.js_invalidate.take() {
-        invalidate(Node::of(slot));
+    let node = Node::of(slot);
+    if let Some(invalidate) = node.js_invalidate() {
+        node.remove_flags(FLAG_JS_ARMED);
+        invalidate(node);
     }
     store::vacate(slot);
+}
+
+thread_local! {
+    static JS_INVALIDATOR: Cell<Invalidator> = const { Cell::new(None) };
 }
 
 #[derive(Clone, Copy)]

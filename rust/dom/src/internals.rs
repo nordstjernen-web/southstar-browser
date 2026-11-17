@@ -87,7 +87,7 @@ pub fn will_validate(node: Node<'_>) -> bool {
     is_form_associated(node)
         && !controls::effectively_disabled(node)
         && node.attr(c"readonly").is_none()
-        && !ancestors(node).any(|p| p.element_name() == Some(b"datalist".as_slice()))
+        && !ancestors(node).any(|p| p.is_tag(crate::Tag::Datalist))
 }
 
 pub fn fails_validation(node: Node<'_>) -> bool {

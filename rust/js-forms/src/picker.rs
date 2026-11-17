@@ -15,7 +15,7 @@ pub fn show_picker(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsRe
     let Some(control) = ffi::element(this) else {
         return Err(scope.type_error("Illegal invocation"));
     };
-    let is_input = control.element_name() == Some(b"input");
+    let is_input = control.is_tag(southstar_dom::Tag::Input);
     if !is_input && control.element_name() != Some(b"select") {
         return Err(scope.type_error("Illegal invocation"));
     }

@@ -21,7 +21,7 @@ pub(crate) fn mark(scope: &mut Scope<'_>, node: Element, class: &Value) {
 }
 
 fn is_form(node: Element) -> bool {
-    node.element_name() == Some(b"form".as_slice())
+    node.is_tag(southstar_dom::Tag::Form)
 }
 
 fn owner_within(node: Element, top: Element) -> Option<Element> {
@@ -134,7 +134,7 @@ pub(crate) fn attribute_changed(js: Js, node: Element, attr_name: &str) {
     if !disabled && !attr_name.eq_ignore_ascii_case("form") {
         return;
     }
-    let fieldset = disabled && node.element_name() == Some(b"fieldset".as_slice());
+    let fieldset = disabled && node.is_tag(southstar_dom::Tag::Fieldset);
     if !fieldset && !internals::is_form_associated(node) {
         return;
     }

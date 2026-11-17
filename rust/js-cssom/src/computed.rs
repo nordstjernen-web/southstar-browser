@@ -683,7 +683,7 @@ fn containing_block(js: Js, n: Node<'_>, b: BoxRef<'static>, pos: &str) -> Optio
                     None => true,
                     Some(pp) => {
                         pp.kind() == southstar_dom::Kind::Document
-                            || p.element_name() == Some(b"body")
+                            || p.is_tag(southstar_dom::Tag::Body)
                     }
                 };
                 if stop {

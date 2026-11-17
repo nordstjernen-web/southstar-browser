@@ -86,7 +86,7 @@ fn find_map<'a>(node: Node<'a>, name: &[u8], depth: i32) -> Option<Node<'a>> {
     if depth >= MAX_DEPTH {
         return None;
     }
-    if node.element_name() == Some(b"map") {
+    if node.is_tag(crate::Tag::Map) {
         let named = |attr: &CStr| node.attr(attr).is_some_and(|v| v.to_bytes() == name);
         if named(c"name") || named(c"id") {
             return Some(node);
@@ -100,7 +100,7 @@ fn first_area(node: Node<'_>, point: (f64, f64), size: (f64, f64), depth: i32) -
         return None;
     }
     children(node).find_map(|child| {
-        let hit = child.element_name() == Some(b"area")
+        let hit = child.is_tag(crate::Tag::Area)
             && area_hit(
                 child.attr(c"shape"),
                 child.attr(c"coords"),

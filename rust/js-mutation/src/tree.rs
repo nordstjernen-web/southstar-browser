@@ -24,7 +24,7 @@ pub(crate) fn mark_scripts_already_started(root: Element, depth: i32) {
     if depth >= MAX_DEPTH {
         return;
     }
-    if root.element_name() == Some(b"script") {
+    if root.is_tag(southstar_dom::Tag::Script) {
         crate::ffi::set_attr(root, SCRIPT_ALREADY_STARTED, c"1");
     }
     for kid in children(root).collect::<Vec<_>>() {

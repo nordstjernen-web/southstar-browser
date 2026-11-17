@@ -1792,6 +1792,7 @@ dependencies = [
  "southstar-datetime",
  "southstar-glib",
  "southstar-html-util",
+ "southstar-html5",
  "southstar-numfmt",
  "southstar-unicode",
  "southstar-url",

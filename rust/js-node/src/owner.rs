@@ -87,10 +87,10 @@ pub fn template_content(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(scope.string(""));
     };
-    let Some(name) = node.name() else {
+    if node.name().is_none() {
         return Ok(scope.string(""));
-    };
-    if !name.to_bytes().eq_ignore_ascii_case(b"template") {
+    }
+    if !node.is_html_tag(southstar_dom::Tag::Template) {
         return ffi::reflect_str_get(scope, this, c"content");
     }
     let cached = scope.get(this, "__nd_template_content")?;

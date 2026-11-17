@@ -13,11 +13,13 @@ const NS_XML: &[u8] = b"http://www.w3.org/XML/1998/namespace";
 const NS_XMLNS: &[u8] = b"http://www.w3.org/2000/xmlns/";
 const NS_XHTML: &[u8] = b"http://www.w3.org/1999/xhtml";
 const NS_SVG: &[u8] = b"http://www.w3.org/2000/svg";
+const NS_MATHML: &[u8] = b"http://www.w3.org/1998/Math/MathML";
 const MAX_DEPTH: i32 = 256;
 const REPLACEMENT: &[u8] = "\u{fffd}".as_bytes();
 
 pub const SVG_NS: u32 = 1 << 7;
 pub const FOREIGN_NS: u32 = 1 << 9;
+pub const MATHML_NS: u32 = 1 << 16;
 pub const CDATA: u32 = 1 << 10;
 pub const PROCESSING_INSTRUCTION: u32 = 1 << 11;
 pub const KEEP_CASE: u32 = 1 << 12;
@@ -388,16 +390,15 @@ impl<D: Dom> Parser<'_, D> {
             }
             return;
         }
-        self.dom.add_flags(
-            element,
-            if uri == Some(NS_SVG) {
-                SVG_NS
-            } else {
-                FOREIGN_NS
-            },
-        );
-        if let Some(uri) = uri.filter(|uri| !uri.is_empty()) {
-            self.dom.set_attr(element, b"data-nd-ns-uri", uri);
+        if uri == Some(NS_SVG) {
+            self.dom.add_flags(element, SVG_NS);
+        } else if uri == Some(NS_MATHML) {
+            self.dom.add_flags(element, FOREIGN_NS | MATHML_NS);
+        } else {
+            self.dom.add_flags(element, FOREIGN_NS);
+            if let Some(uri) = uri.filter(|uri| !uri.is_empty()) {
+                self.dom.set_attr(element, b"data-nd-ns-uri", uri);
+            }
         }
     }
 

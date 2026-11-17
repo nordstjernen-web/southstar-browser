@@ -63,7 +63,7 @@ pub fn ordinals_end() {
 }
 
 fn is_li(n: Node<'_>) -> bool {
-    n.element_name() == Some(b"li")
+    n.is_tag(southstar_dom::Tag::Li)
 }
 
 fn children(parent: Node<'_>) -> impl Iterator<Item = Node<'_>> {

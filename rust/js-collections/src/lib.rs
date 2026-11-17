@@ -71,7 +71,7 @@ pub(crate) fn is_named(node: Element, tag: &[u8]) -> bool {
 }
 
 pub(crate) fn is_template(node: Element) -> bool {
-    is_named(node, b"template")
+    node.is_html_tag(southstar_dom::Tag::Template)
 }
 
 pub(crate) fn is_class_space(c: u8) -> bool {

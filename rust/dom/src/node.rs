@@ -7,7 +7,7 @@ use core::ffi::{CStr, c_uint};
 
 use crate::attrs::{self, NsName};
 use crate::serialize::is_embedded_doc;
-use crate::{Kind, MAX_DEPTH, Node, Tree, children};
+use crate::{FLAG_MATHML_NS, Kind, MAX_DEPTH, Node, Tree, children};
 
 pub const KIND_DOCUMENT: c_uint = 0;
 pub const KIND_DOCTYPE: c_uint = 1;
@@ -71,7 +71,11 @@ fn clone_shallow(src: Node) -> Option<Node<'static>> {
             let out = new_element(name_or_empty(src));
             out.add_flags(
                 src.flags()
-                    & (FLAG_SVG_NS | FLAG_FOREIGN_NS | FLAG_KEEP_CASE | FLAG_INPUT_INDETERMINATE),
+                    & (FLAG_SVG_NS
+                        | FLAG_FOREIGN_NS
+                        | FLAG_MATHML_NS
+                        | FLAG_KEEP_CASE
+                        | FLAG_INPUT_INDETERMINATE),
             );
             copy_attrs(src, out);
             out

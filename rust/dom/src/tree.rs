@@ -80,6 +80,6 @@ pub fn details_fragment_needs_open(details: Node, target: Node) -> bool {
         return false;
     };
     children(details)
-        .find(|c| c.element_name() == Some(b"summary"))
+        .find(|c| c.is_tag(crate::Tag::Summary))
         .is_none_or(|summary| summary != child)
 }

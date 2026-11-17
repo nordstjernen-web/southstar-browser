@@ -6,7 +6,9 @@
 use core::ffi::CStr;
 
 use crate::data::NewAttr;
-use crate::{Attr, FLAG_SVG_NS, Node};
+use crate::{
+    Attr, FLAG_FOREIGN_NS, FLAG_MATHML_NS, FLAG_SVG_NS, MATHML_NAMESPACE, Node, SVG_NAMESPACE,
+};
 
 pub fn is_ascii_lower(s: &[u8]) -> bool {
     !s.iter().any(u8::is_ascii_uppercase)
@@ -51,6 +53,23 @@ pub fn find<'a>(el: Node<'a>, name: &CStr) -> Option<Attr<'a>> {
         });
     }
     el.attrs().find(|a| caseless_eq(a.name(), wanted))
+}
+
+pub fn stored_namespace(el: Node<'_>) -> Option<&CStr> {
+    if !el.is_element() {
+        return None;
+    }
+    let flags = el.flags();
+    if flags & FLAG_SVG_NS != 0 {
+        return Some(SVG_NAMESPACE);
+    }
+    if flags & FLAG_MATHML_NS != 0 {
+        return Some(MATHML_NAMESPACE);
+    }
+    if flags & FLAG_FOREIGN_NS == 0 {
+        return None;
+    }
+    get(el, c"data-nd-ns-uri")
 }
 
 pub fn get<'a>(el: Node<'a>, name: &CStr) -> Option<&'a CStr> {

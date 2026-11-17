@@ -3,13 +3,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::{Cell, RefCell, UnsafeCell};
+use core::cell::{Cell, OnceCell, RefCell, UnsafeCell};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
-use crate::Node;
 use crate::index::Indexes;
 use crate::reclaim;
+use crate::{Node, Tag};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
@@ -434,22 +434,35 @@ impl AttrSlot {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct Rare {
+    pub(crate) source_position: Cell<(c_int, c_int)>,
+    pub(crate) template_content: Link,
+    pub(crate) indexes: RefCell<Option<Indexes>>,
+}
+
+impl Rare {
+    fn clear(&self) {
+        self.source_position.set((0, 0));
+        self.template_content.set(None);
+        drop(self.indexes.take());
+    }
+}
+
 pub(crate) struct NodeSlot {
     pub(crate) generation: Cell<u64>,
     pub(crate) kind: Cell<Kind>,
     pub(crate) flags: Cell<u32>,
     pub(crate) attr_gen: Cell<u32>,
     pub(crate) attr_bloom: Cell<u64>,
-    pub(crate) source_position: Cell<(c_int, c_int)>,
     pub(crate) parent: Link,
     pub(crate) first_child: Link,
     pub(crate) last_child: Link,
     pub(crate) prev_sibling: Link,
     pub(crate) next_sibling: Link,
-    pub(crate) template_content: Link,
     pub(crate) js_wrapper: Cell<*mut c_void>,
-    pub(crate) js_invalidate: Cell<Invalidator>,
-    pub(crate) indexes: RefCell<Option<Box<Indexes>>>,
+    pub(crate) tag: Cell<Tag>,
+    pub(crate) rare: OnceCell<Box<Rare>>,
     pub(crate) class_tokens: RefCell<Option<ClassTokens>>,
     name: UnsafeCell<Option<Name>>,
     text: UnsafeCell<Option<NulString>>,
@@ -464,21 +477,27 @@ impl NodeSlot {
             flags: Cell::new(0),
             attr_gen: Cell::new(0),
             attr_bloom: Cell::new(0),
-            source_position: Cell::new((0, 0)),
             parent: Cell::new(None),
             first_child: Cell::new(None),
             last_child: Cell::new(None),
             prev_sibling: Cell::new(None),
             next_sibling: Cell::new(None),
-            template_content: Cell::new(None),
             js_wrapper: Cell::new(core::ptr::null_mut()),
-            js_invalidate: Cell::new(None),
-            indexes: RefCell::new(None),
+            tag: Cell::new(Tag::Other),
+            rare: OnceCell::new(),
             class_tokens: RefCell::new(None),
             name: UnsafeCell::new(None),
             text: UnsafeCell::new(None),
             attrs: UnsafeCell::new(Vec::new()),
         }
+    }
+
+    pub(crate) fn rare(&self) -> Option<&Rare> {
+        self.rare.get().map(Box::as_ref)
+    }
+
+    pub(crate) fn rare_or_init(&self) -> &Rare {
+        self.rare.get_or_init(Box::default)
     }
 
     pub(crate) fn is_live(&self) -> bool {
@@ -543,25 +562,25 @@ impl NodeSlot {
         for attr in self.replace_attrs(Vec::new()) {
             crate::store::drop_attr(attr);
         }
-        drop(self.indexes.take());
+        if let Some(rare) = self.rare() {
+            rare.clear();
+        }
         drop(self.class_tokens.take());
         self.kind.set(Kind::Other);
         self.flags.set(0);
         self.attr_gen.set(0);
         self.attr_bloom.set(0);
-        self.source_position.set((0, 0));
         for link in [
             &self.parent,
             &self.first_child,
             &self.last_child,
             &self.prev_sibling,
             &self.next_sibling,
-            &self.template_content,
         ] {
             link.set(None);
         }
         self.js_wrapper.set(core::ptr::null_mut());
-        self.js_invalidate.set(None);
+        self.tag.set(Tag::Other);
         self.generation.set(self.generation.get().wrapping_add(1));
     }
 }

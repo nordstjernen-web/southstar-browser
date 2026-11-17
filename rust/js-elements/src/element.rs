@@ -236,7 +236,7 @@ pub fn form(scope: &mut Scope<'_>, this: &Value) -> JsResult {
 }
 
 pub fn set_content(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
-    if named(ffi::unwrap_node(this), b"template") {
+    if ffi::unwrap_node(this).is_some_and(|n| n.is_html_tag(southstar_dom::Tag::Template)) {
         return Ok(());
     }
     ffi::reflect_str_set(scope, this, value, c"content").map(drop)

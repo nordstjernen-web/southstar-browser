@@ -53,7 +53,7 @@ fn find_datalist<'a>(node: Node<'a>, id: &CStr, depth: i32) -> Option<Node<'a>> 
     if depth >= MAX_DEPTH {
         return None;
     }
-    if node.element_name() == Some(b"datalist") && node.attr(c"id") == Some(id) {
+    if node.is_tag(southstar_dom::Tag::Datalist) && node.attr(c"id") == Some(id) {
         return Some(node);
     }
     children(node).find_map(|c| find_datalist(c, id, depth + 1))
