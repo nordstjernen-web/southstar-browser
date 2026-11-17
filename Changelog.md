@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* The tag table (`rust/html5/src/tags.rs`, shared with Nordstjernen) gains
+  the SVG element names the engine checks for: `clipPath`, `feBlend`,
+  `feFlood`, `feGaussianBlur`, `filter`, `foreignObject` (as SVG spells it,
+  `Tag::SvgForeignObject`; the parser's lowercase entry stays), `linearGradient`,
+  `marker`, `mask`, `pattern`, `radialGradient` and `switch`. The SVG
+  painter's gradient and marker checks compare the tag, and
+  `Node::name_is_tag_ignore_case` compares a known tag's name, so it still
+  matches `foreignObject` against `foreignobject`.
 * The remaining 330 checks of a node's name against a tag the HTML parser
   knows compare tag ids instead of strings. Each crate's name helper
   (`named`, `is_named`, `name_is`, `element_named`, ...) is gone where it

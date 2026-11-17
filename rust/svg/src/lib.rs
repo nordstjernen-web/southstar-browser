@@ -756,7 +756,7 @@ impl<'a> Ctx<'a> {
         bw: f64,
         bh: f64,
     ) -> Option<Pattern> {
-        let linear = name_is(g, b"linearGradient");
+        let linear = g.name_is_tag(southstar_dom::Tag::LinearGradient);
         let units = self.inherited_attr(g, c"gradientUnits");
         let obb = units.is_none_or(|u| !eq_ci(u.to_bytes(), b"userSpaceOnUse"));
         let bw_ref = if obb { 1.0 } else { self.vw };
@@ -838,9 +838,10 @@ impl<'a> Ctx<'a> {
             PaintKind::Ref => {}
         }
         let g = paint.reference.as_deref().and_then(|id| self.by_id(id));
-        if let Some(g) =
-            g.filter(|&g| name_is(g, b"linearGradient") || name_is(g, b"radialGradient"))
-        {
+        if let Some(g) = g.filter(|&g| {
+            g.name_is_tag(southstar_dom::Tag::LinearGradient)
+                || g.name_is_tag(southstar_dom::Tag::RadialGradient)
+        }) {
             let (bx, by, bx2, by2) = cr.path_extents();
             if let Some(pat) = self.gradient_pattern(g, st, opacity, bx, by, bx2 - bx, by2 - by) {
                 cr.set_source(&pat);
@@ -1074,7 +1075,8 @@ impl<'a> Ctx<'a> {
     fn marker_ref(&mut self, n: Node<'a>, prop: &CStr) -> Option<Node<'a>> {
         let v = self.prop(n, prop).or_else(|| self.prop(n, c"marker"))?;
         let (id, _) = parse::url_id(v.to_bytes())?;
-        self.by_id(&id).filter(|&m| name_is(m, b"marker"))
+        self.by_id(&id)
+            .filter(|&m| m.name_is_tag(southstar_dom::Tag::Marker))
     }
 
     fn draw_marker(&mut self, marker: Node<'a>, st: &State, x: f64, y: f64, angle: f64) {
