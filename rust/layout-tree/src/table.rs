@@ -89,25 +89,39 @@ fn node_is_row_group(n: Node<'_>, styles: Styles) -> bool {
     )
 }
 
+// A table, row or cell is what its computed display says. The user agent
+// sheet gives `table`, `tr`, `td` and `th` their table displays, so the tag
+// decides only for an element that has no style; an author rule such as
+// `tr { display: flex }` or `table { display: block }` makes the element an
+// ordinary box of that kind.
 fn is_table_row(n: Node<'_>, styles: Styles) -> bool {
     if !n.is_element() {
         return false;
     }
-    element_tag(n) == Some(b"tr") || is_internal(display(styles.get(n)), INTERNAL_ROW)
+    match styles.get(n) {
+        Some(s) => is_internal(display(Some(s)), INTERNAL_ROW),
+        None => element_tag(n) == Some(b"tr"),
+    }
 }
 
 pub fn is_table_box(n: Option<Node<'_>>, styles: Styles) -> bool {
     let Some(n) = n.filter(|n| n.is_element()) else {
         return false;
     };
-    element_tag(n) == Some(b"table") || display_is_table(styles.get(n))
+    match styles.get(n) {
+        Some(s) => display_is_table(Some(s)),
+        None => element_tag(n) == Some(b"table"),
+    }
 }
 
 fn is_cell_element(n: Node<'_>, styles: Styles) -> bool {
-    if n.is_tag(southstar_dom::Tag::Td) || n.is_tag(southstar_dom::Tag::Th) {
-        return true;
+    if !n.is_element() {
+        return false;
     }
-    n.is_element() && is_internal(display(styles.get(n)), INTERNAL_CELL)
+    match styles.get(n) {
+        Some(s) => is_internal(display(Some(s)), INTERNAL_CELL),
+        None => n.is_tag(southstar_dom::Tag::Td) || n.is_tag(southstar_dom::Tag::Th),
+    }
 }
 
 fn is_table_caption(n: Node<'_>, styles: Styles) -> bool {
@@ -461,11 +475,31 @@ fn build_table_row<'a>(tr: Node<'_>, styles: Styles) -> BoxRef<'a> {
     let row = BoxPool::new_box(BOX_TABLE_ROW);
     row.set_dom(Some(tr));
     row.set_style(styles.get(tr).map_or(core::ptr::null(), StyleRef::as_ptr));
+    let mut anon: Option<BoxRef<'a>> = None;
     for c in siblings_from(tr.first_child()) {
-        if !is_cell_element(c, styles) || style_is_none(styles.get(c)) {
+        // A hidden child generates no box and takes no column.
+        if !c.is_element() || non_rendering_element(c) || style_is_none(styles.get(c)) {
             continue;
         }
-        append_child(row, build_cell(c, styles));
+        if is_cell_element(c, styles) {
+            anon = None;
+            append_child(row, build_cell(c, styles));
+            continue;
+        }
+        // A child that is not a cell (`td { display: block }`) goes into an
+        // anonymous cell, shared with the non-cell children next to it.
+        if style_is_absolute_or_fixed(styles.get(c)) {
+            continue;
+        }
+        let Some(child) = build_block(c, styles) else {
+            continue;
+        };
+        let cell = *anon.get_or_insert_with(|| {
+            let cell = BoxPool::new_box(BOX_TABLE_CELL);
+            append_child(row, cell);
+            cell
+        });
+        append_child(cell, child);
     }
     row
 }
