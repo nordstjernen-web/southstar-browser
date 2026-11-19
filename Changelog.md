@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* Docs: SECURITY.md is now a short reporting FAQ shared by the three
+  browsers of the project (Nordstjernen Sol, Northstar and Southstar).
+  The threat model, sandbox and known limits move unchanged to
+  `docs/security-model.md`.
 * A `<progress>` or `<meter>` that is a block box (`display: block`,
   absolutely positioned, a flex or grid item) draws its bar. Only the
   inline form drew one, so such an element showed its background and no
