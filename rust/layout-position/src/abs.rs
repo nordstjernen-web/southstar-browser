@@ -358,12 +358,26 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
         None => ctx.root,
     };
     let mut paint_parent = cb;
-    if e.fixed
-        && cb_dom.is_none()
-        && let Some(anc) = abs_entry_cb_dom(e, styles).and_then(|d| ctx.map.get(d))
-        && can_host_fixed(anc)
-    {
-        paint_parent = anc;
+    if e.fixed && cb_dom.is_none() {
+        // A fixed box is painted in the stacking context it belongs to, so
+        // it hangs under a positioned ancestor. The nearest one may be
+        // inside a scroll container, which would clip it; then the next one
+        // out is tried. Left under the viewport, the box was painted below
+        // any z-indexed ancestor: a fixed toolbar inside a z-indexed dialog
+        // disappeared behind it.
+        let mut anc_dom = abs_entry_cb_dom(e, styles);
+        for _ in 0..64 {
+            let Some(d) = anc_dom else {
+                break;
+            };
+            if let Some(anc) = ctx.map.get(d)
+                && can_host_fixed(anc)
+            {
+                paint_parent = anc;
+                break;
+            }
+            anc_dom = find_abs_containing_block_dom(d, styles);
+        }
     }
     if depth_exceeds(paint_parent) {
         return;

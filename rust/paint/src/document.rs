@@ -16,8 +16,8 @@ use southstar_style::{PropId as P, ValueRef, layer, layer_count};
 use crate::ffi::engine::{self, SelectionRun};
 use crate::util::{Rgba, get, keyword_is, rgba_of, style_of};
 use crate::walk::{
-    self, LAYERS_DOC, LAYERS_PLAN, LayerKinds, Layers, VpCapture, box_clip_hides, box_is_hidden,
-    box_skips_contents, box_z_index, paint_cache_clip, paint_walk,
+    self, LAYERS_DOC, LAYERS_PLAN, LayerKinds, Layers, VpCapture, box_clip_hides,
+    box_hides_subtree, box_skips_contents, box_z_index, paint_cache_clip, paint_walk,
 };
 use crate::{decor, marker};
 
@@ -288,7 +288,7 @@ fn layers_scan(
     kinds: &mut LayerKinds,
     roots: &mut i32,
 ) -> bool {
-    if box_is_hidden(b) || box_clip_hides(b) {
+    if box_hides_subtree(b) || box_clip_hides(b) {
         return true;
     }
     let kind = layers_scan_kind(b, under, in_atomic);

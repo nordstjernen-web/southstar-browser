@@ -383,6 +383,12 @@ fn primary(text: &CStr, pos: &mut usize, end: usize, depth: i32) -> Option<Term>
             continue;
         }
         let close = match_close_paren(s, p + len + 1, end)?;
+        if name.eq_ignore_ascii_case(b"round")
+            && let Some(out) = round_pixel_snap(s, p + len + 1, close, depth)
+        {
+            *pos = close + 1;
+            return Some(out);
+        }
         let fragment = c_text(s[p..=close].to_vec());
         let out = match parse_calc(&fragment)? {
             Parsed::Calc(calc) => {
@@ -477,6 +483,52 @@ fn product(text: &CStr, pos: &mut usize, end: usize, depth: i32) -> Option<Term>
         }
         *pos = p;
     }
+}
+
+/// Parses one whole `calc()` argument into a term.
+fn term_of_arg(arg: &[u8], depth: i32) -> Option<Term> {
+    let text = c_text(arg.to_vec());
+    let end = arg.len();
+    let mut pos = 0;
+    let out = sum(&text, &mut pos, end, depth + 1)?;
+    (skip_ws(arg, pos, end) == end).then_some(out)
+}
+
+/// A `round()` nested in a larger `calc()` has to become one linear term,
+/// and rounding a percentage is not linear: its value was taken with the
+/// percentage measured against the viewport, whatever the property refers
+/// to. When the step is a pixel or less, as in the pixel-snapping idiom
+/// `calc(0.02px + round(nearest, 100% + 0.2px, 1px))`, the rounded value is
+/// within that step of its argument, so the argument itself stands in for
+/// it and its percentage is resolved where the value is used.
+fn round_pixel_snap(s: &[u8], args: usize, close: usize, depth: i32) -> Option<Term> {
+    let parts = split_args(s, args, close, 4);
+    const STRATEGIES: [&[u8]; 4] = [b"nearest", b"up", b"down", b"to-zero"];
+    let skip = usize::from(parts.first().is_some_and(|first| {
+        STRATEGIES
+            .iter()
+            .any(|name| first.eq_ignore_ascii_case(name))
+    }));
+    if parts.len() != skip + 2 {
+        return None;
+    }
+    let value = term_of_arg(parts[skip], depth)?;
+    let step = term_of_arg(parts[skip + 1], depth)?;
+    let plain = |t: &Term| !t.is_number && t.func == 0;
+    let step_is_px = step.pct == 0.0
+        && step.em == 0.0
+        && step.rem == 0.0
+        && step.vw == 0.0
+        && step.vh == 0.0
+        && step.vmin == 0.0
+        && step.vmax == 0.0;
+    (plain(&value)
+        && plain(&step)
+        && value.pct != 0.0
+        && step_is_px
+        && step.px > 0.0
+        && step.px <= 1.0)
+        .then_some(value)
 }
 
 fn sum(text: &CStr, pos: &mut usize, end: usize, depth: i32) -> Option<Term> {

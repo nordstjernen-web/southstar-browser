@@ -75,7 +75,7 @@ pub fn measure_natural_width(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) 
             if is_length_or_calc(wv) {
                 let styled = length_resolve(wv, inline_atomic_measure_basis(b), -1.0);
                 if styled >= 0.0 {
-                    return styled;
+                    return replaced_width_length_limits(b, styled);
                 }
             }
             return if b.content_width() > 0.0 {
@@ -128,6 +128,27 @@ pub fn measure_natural_width(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) 
         parent_style,
         true,
     )
+}
+
+/// Clamps a replaced box's length `width` to its length `min-width` and
+/// `max-width`, measured the same way as the width: an icon with
+/// `width: 24px; min-width: 52px` contributes 52px to the row it is in.
+fn replaced_width_length_limits(b: BoxRef<'_>, mut w: f64) -> f64 {
+    let limit = |v: Option<ValueRef<'_>>| {
+        if !is_length_or_calc(v) || value_is_percent(v) {
+            return -1.0;
+        }
+        length_resolve(v, 0.0, -1.0)
+    };
+    let max = limit(style_value(b, PropId::MaxWidth));
+    if max >= 0.0 && w > max {
+        w = max;
+    }
+    let min = limit(style_value(b, PropId::MinWidth));
+    if min >= 0.0 && w < min {
+        w = min;
+    }
+    w
 }
 
 fn definite_width_limit(b: BoxRef<'_>, v: Option<ValueRef<'_>>) -> f64 {
