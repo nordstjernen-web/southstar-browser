@@ -157,7 +157,20 @@ pub mod landlock {
     }
 }
 
-pub const SYSTEM_EXEC_DIRS: [&str; 4] = ["/usr", "/usr/local", "/lib", "/lib64"];
+/// On NixOS and Guix every library, font and configuration file lives in
+/// the store, and `/etc`, `/run/current-system` and the user profile hold
+/// only symlinks into it. Landlock grants what a path resolves to, so
+/// without the store fontconfig finds no fonts and GTK no modules. The
+/// store is read-only and world-readable by design; elsewhere the paths do
+/// not exist and are skipped.
+pub const SYSTEM_EXEC_DIRS: [&str; 6] = [
+    "/usr",
+    "/usr/local",
+    "/lib",
+    "/lib64",
+    "/nix/store",
+    "/gnu/store",
+];
 
 pub const SYSTEM_READ_DIRS: [&str; 10] = [
     "/etc",
