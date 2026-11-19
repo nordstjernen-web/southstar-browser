@@ -243,6 +243,31 @@ pub fn box_is_hidden(b: BoxRef<'_>) -> bool {
         .is_some_and(|v| matches!(v.to_bytes(), b"hidden" | b"collapse"))
 }
 
+/// Whether some box below `b` is visible. `visibility` is inherited, but a
+/// descendant may set it back to `visible`, and is then painted although its
+/// ancestor is not.
+fn box_has_visible_descendant(b: BoxRef<'_>, depth: u32) -> bool {
+    if depth > 256 {
+        return true;
+    }
+    let mut c = b.first_child();
+    while let Some(child) = c {
+        if style_of(child).is_some() && !box_is_hidden(child) {
+            return true;
+        }
+        if box_has_visible_descendant(child, depth + 1) {
+            return true;
+        }
+        c = child.next_sibling();
+    }
+    false
+}
+
+/// Whether nothing in `b`'s subtree is painted because of `visibility`.
+pub fn box_hides_subtree(b: BoxRef<'_>) -> bool {
+    box_is_hidden(b) && !box_has_visible_descendant(b, 0)
+}
+
 pub fn content_origin(b: BoxRef<'_>) -> (f64, f64) {
     let (m, bd, p) = (b.margin(), b.border(), b.padding());
     (
@@ -1053,7 +1078,10 @@ fn paint_frame_canvas(cr: ContextRef, b: BoxRef<'_>) {
 }
 
 pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
-    if box_is_hidden(b) {
+    // A hidden box paints nothing of its own, but its subtree is still
+    // walked when a descendant is visible.
+    let self_hidden = box_is_hidden(b);
+    if self_hidden && !box_has_visible_descendant(b, 0) {
         return;
     }
     dbg_paint_probe(cr, b);
@@ -1232,7 +1260,7 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
             cr.restore();
         }
     }
-    if !box_offscreen {
+    if !box_offscreen && !self_hidden {
         let s0 = if debug_on() {
             cr.clip_extents()
         } else {
@@ -1290,10 +1318,11 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
             paint_svg(cr, b);
         }
     }
-    if !skip_contents && node_of(b).and_then(Node::element_name) == Some(b"canvas") {
+    if !skip_contents && !self_hidden && node_of(b).and_then(Node::element_name) == Some(b"canvas")
+    {
         paint_canvas_element(cr, b);
     }
-    if !skip_contents && !box_offscreen && node_of(b).is_some_and(hosts_document) {
+    if !skip_contents && !box_offscreen && !self_hidden && node_of(b).is_some_and(hosts_document) {
         paint_frame_canvas(cr, b);
     }
 
@@ -1505,10 +1534,11 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     if cull_shift != 0.0 {
         shift_cull_window(-cull_shift);
     }
-    if clip_overflow {
+    if clip_overflow && !self_hidden {
         paint_scrollbars(cr, b);
     }
-    if b.kind() == BoxKind::Block
+    if !self_hidden
+        && b.kind() == BoxKind::Block
         && b.columns() >= 2
         && let Some(s) = style
     {
