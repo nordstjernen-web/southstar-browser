@@ -130,7 +130,7 @@ before any page is opened), so a renderer crash is a per-tab failure and
 untrusted content always runs under a loaded syscall filter. The shell
 parses no untrusted bytes but must `fork`/`execv` renderers and create POSIX
 shm, so it runs under a widened Landlock with seccomp skipped. The mechanics
-live in `rust/sandbox`; `SECURITY.md` describes the boundary.
+live in `rust/sandbox`; `docs/security-model.md` describes the boundary.
 
 **The plan from here:**
 
