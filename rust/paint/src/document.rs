@@ -19,7 +19,7 @@ use crate::walk::{
     self, LAYERS_DOC, LAYERS_PLAN, LayerKinds, Layers, VpCapture, box_clip_hides,
     box_hides_subtree, box_skips_contents, box_z_index, paint_cache_clip, paint_walk,
 };
-use crate::{decor, marker};
+use crate::{decor, dropdown, marker};
 
 pub const VP_FIXED: i32 = 1;
 pub const VP_STICKY: i32 = 2;
@@ -179,11 +179,18 @@ pub fn paint_document(
     decor::set_canvas_owner(owner.map(|(_, o)| o));
     paint_cache_clip(cr);
     begin_selection(root, sel);
+    let dropdowns = walk::with(|w| w.layers.borrow().mode != LAYERS_PLAN);
+    if dropdowns {
+        dropdown::begin(cr);
+    }
     let top = top_layer_box(root).map_or(ptr::null(), BoxRef::as_ptr);
     walk::with(|w| w.skip_box.set(top));
     paint_walk(cr, root, highlight);
     walk::with(|w| w.skip_box.set(ptr::null()));
     paint_top_layer(cr, root, highlight);
+    if dropdowns {
+        dropdown::finish(cr, highlight);
+    }
     end_pass();
 }
 
@@ -388,7 +395,9 @@ pub fn vp_layer(
     let m = Matrix::multiply(&layer.rel, &base);
     cr.set_matrix(&m);
     walk::with(|w| w.flush_box.set(layer.b.as_ptr()));
+    dropdown::begin(cr);
     paint_walk(cr, layer.b, highlight);
+    dropdown::finish(cr, highlight);
     walk::with(|w| w.flush_box.set(saved_flush));
     cr.restore();
     walk::with(|w| w.sticky_static.set(ptr::null()));

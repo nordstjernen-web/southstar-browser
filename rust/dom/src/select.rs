@@ -150,6 +150,24 @@ pub fn option_select(option: Node<'_>) -> Option<Node<'_>> {
     (parent.is_tag(crate::Tag::Select)).then_some(parent)
 }
 
+pub fn option_in_dropdown(option: Node) -> bool {
+    if !option.is_tag(crate::Tag::Option) {
+        return false;
+    }
+    if option
+        .parent()
+        .is_some_and(|p| p.is_tag(crate::Tag::Datalist))
+    {
+        return true;
+    }
+    option_select(option).is_some_and(|select| {
+        select.attr(c"multiple").is_none()
+            && !select
+                .attr(c"size")
+                .is_some_and(|size| size_lists_rows(size.to_bytes()))
+    })
+}
+
 pub fn picks_first_option(select: Node) -> bool {
     select.attr(c"data-nd-noselect").is_none()
         && select.attr(c"multiple").is_none()

@@ -518,7 +518,9 @@ impl<'a> Collector<'a> {
     pub(crate) fn textarea(&mut self, n: Node<'_>, s: Option<StyleRef<'_>>) {
         let start = self.out.len();
         let focused = same(self.state.focused_input, n);
-        self.push(NBSP);
+        if !same(self.state.form_control_inline, n) {
+            self.push(NBSP);
+        }
         let val_start = self.out.len();
         let raw = controls::textarea_value(Some(n));
         let raw = &raw[..raw.iter().position(|&c| c == 0).unwrap_or(raw.len())];

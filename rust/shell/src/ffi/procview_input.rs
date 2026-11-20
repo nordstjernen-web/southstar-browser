@@ -252,7 +252,12 @@ fn start_key_full(
             r.fallback_x = x;
             r.fallback_y = y;
         }
-        r.mods = modifier_bits(state);
+        r.mods = modifier_bits(state)
+            | if kind == 0 {
+                southstar_browser::KEY_MOD_TEXT_SEPARATE
+            } else {
+                0
+            };
         r.key = dup(&key);
         r.code = dup(js_code(keyval).as_bytes());
     });
@@ -267,7 +272,9 @@ pub(super) fn start_key_text(v: *mut NsProcView, kind: c_int, text: &[u8]) {
         return;
     }
     let state = view(v);
-    state.key_seq += 1;
+    if kind != 2 {
+        state.key_seq += 1;
+    }
     let seq = state.key_seq;
     send_req(v, REQ_KEY, |r| {
         r.seq = seq;
@@ -607,6 +614,10 @@ pub(super) fn on_key(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType)
         }
         ScrollKey::To { x, y } => {
             start_key_full(v, 0, keyval, state, Some((x, y)));
+            if keyval == input::KEY_SPACE {
+                start_key(v, 3, keyval, state);
+                return false;
+            }
             true
         }
         ScrollKey::Unhandled => {
@@ -677,13 +688,16 @@ pub(super) fn ns_pv_input_install_keys(v: *mut NsProcView) {
         return;
     };
     let key = EventControllerKey::new();
+    key.set_propagation_phase(gtk::sys::PHASE_CAPTURE);
     key.connect_key_pressed(move |keyval, _, state| on_key(v, keyval, state));
     key.connect_key_released(move |keyval, _, state| on_key_released(v, keyval, state));
+    area.add_controller(key);
+    let text_input = EventControllerKey::new();
     let im = IMContext::new_multicontext();
     im.connect_commit(move |text| on_im_commit(v, text));
-    key.set_im_context(&im);
+    text_input.set_im_context(&im);
     view(v).im = im.into_raw();
-    area.add_controller(key);
+    area.add_controller(text_input);
 }
 
 pub(super) fn ns_pv_css_viewport_w(v: *mut NsProcView) -> c_int {

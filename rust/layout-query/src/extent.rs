@@ -105,8 +105,19 @@ pub fn compute_paint_bounds(b: BoxRef<'_>) {
     b.set_paint_bounds(top - reach, bottom + reach);
 }
 
+fn has_transform_style(s: StyleRef<'_>) -> bool {
+    s.get(PropId::Transform)
+        .and_then(ValueRef::transform)
+        .is_some_and(|t| t.n_ops > 0)
+        || s.get(PropId::Translate).is_some()
+        || s.get(PropId::Rotate).is_some()
+        || s.get(PropId::Scale).is_some()
+        || s.get(PropId::Perspective).is_some()
+}
+
 fn moves_when_painted(b: BoxRef<'_>) -> bool {
-    ffi::style_of(b).is_some_and(|s| paint_unbounded(s) && !is_fixed_or_sticky(s))
+    ffi::style_of(b)
+        .is_some_and(|s| has_transform_style(s) || (paint_unbounded(s) && !is_fixed_or_sticky(s)))
 }
 
 pub struct Extent {

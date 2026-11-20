@@ -19,3 +19,4 @@ mod scroll;
 mod settle;
 
 pub use ffi::set_color_scheme;
+pub use input::KEY_MOD_TEXT_SEPARATE;

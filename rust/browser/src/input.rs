@@ -493,15 +493,16 @@ pub fn press(b: &NsBrowser, x: c_int, y: c_int, mods: c_int) -> Option<Rc<CStr>>
     if node.is_some() && ffi::page_uses_active() {
         relayout_now(b);
     }
+    let mut mousedown_prevented = false;
     if let (Some(js), Some(node)) = (b.js(), node) {
         let p = viewport_pointer(b, x, y, 0, 1, mods);
         js.dispatch_mouse(node, c"pointerdown", &p, None, false);
-        js.dispatch_mouse(node, c"mousedown", &p, None, false);
+        mousedown_prevented = js.dispatch_mouse(node, c"mousedown", &p, None, true);
         note_mutation(b);
     }
     let in_datalist =
         node.is_some_and(|n| ancestors_and_self(n).any(|a| ffi::is_named(a, c"datalist")));
-    if let Some(js) = b.js().filter(|_| !in_datalist) {
+    if let Some(js) = b.js().filter(|_| !in_datalist && !mousedown_prevented) {
         let focus = node.and_then(|n| ancestors_and_self(n).find(|&a| ffi::is_focusable(a)));
         let refocus = focus.is_some_and(|f| same_node(edit::focused_field(b), f));
         let pointed = focus.and_then(|f| edit::field_offset_at(b, f, x, y, true));
@@ -807,6 +808,8 @@ fn select_key(b: &NsBrowser, select: Node<'_>, key: Option<&CStr>, mods: c_int) 
     false
 }
 
+pub const KEY_MOD_TEXT_SEPARATE: c_int = 16;
+
 pub struct KeyEvent<'a> {
     pub kind: c_int,
     pub key: Option<&'a CStr>,
@@ -892,6 +895,14 @@ fn keydown_default(b: &NsBrowser, ev: &KeyEvent<'_>, prevented_out: &mut bool) {
             *prevented_out = true;
             return;
         }
+        if ffi::editable_value(f).is_some()
+            && mods & KEY_MOD_TEXT_SEPARATE != 0
+            && plain
+            && edit::key_char_code(key) > 0
+        {
+            *prevented_out = true;
+            return;
+        }
         if ffi::editable_value(f).is_some() && edit::edit_key(b, f, key, mods) {
             b.dirty.set(true);
             return;
@@ -921,7 +932,12 @@ pub fn key(b: &NsBrowser, ev: &KeyEvent<'_>) -> (Option<Rc<CStr>>, bool) {
     let key = ev.key;
     let mods = ev.mods;
     match ev.kind {
-        2 => insert_text(b, key),
+        2 => {
+            if !b.key_text_suppressed.get() {
+                insert_text(b, key);
+            }
+            b.key_text_suppressed.set(false);
+        }
         4 => {
             if let Some(text) = key.filter(|k| !k.is_empty() && ffi::utf8_validate(k)) {
                 edit::paste(b, target, text);
@@ -940,6 +956,7 @@ pub fn key(b: &NsBrowser, ev: &KeyEvent<'_>) -> (Option<Rc<CStr>>, bool) {
                 );
                 if pressed {
                     prevented_out = true;
+                    b.key_text_suppressed.set(true);
                 }
                 note_mutation(b);
             }
@@ -947,7 +964,7 @@ pub fn key(b: &NsBrowser, ev: &KeyEvent<'_>) -> (Option<Rc<CStr>>, bool) {
         }
         kind => {
             let kind_name = if kind == 1 { c"keyup" } else { c"keydown" };
-            let prevented = js.dispatch_key(
+            let mut prevented = js.dispatch_key(
                 target,
                 kind_name,
                 key.unwrap_or(c""),
@@ -955,11 +972,27 @@ pub fn key(b: &NsBrowser, ev: &KeyEvent<'_>) -> (Option<Rc<CStr>>, bool) {
                 (ev.keycode, 0),
                 mods,
             );
+            b.keydown_prevented.set(kind == 0 && prevented);
+            b.key_text_suppressed.set(kind == 0 && prevented);
+            note_mutation(b);
+            if kind == 0
+                && !prevented
+                && mods & (2 | 4 | 8) == 0
+                && key.is_some_and(|k| k.to_bytes() == b"Enter")
+            {
+                prevented = js.dispatch_key(
+                    target,
+                    c"keypress",
+                    c"Enter",
+                    ev.code.unwrap_or(c"Enter"),
+                    (13, 13),
+                    mods & 1,
+                );
+                note_mutation(b);
+            }
             if prevented {
                 prevented_out = true;
             }
-            b.keydown_prevented.set(kind == 0 && prevented);
-            note_mutation(b);
             if kind == 0
                 && !prevented
                 && mods & 4 != 0

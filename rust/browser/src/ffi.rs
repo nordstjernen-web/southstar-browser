@@ -231,6 +231,7 @@ pub struct NsBrowser {
     pub press_mods: Cell<c_int>,
     pub press_active: Flag,
     pub keydown_prevented: Flag,
+    pub key_text_suppressed: Flag,
     pub search_query: Text,
     pub search_case: Flag,
     pub search_active: BoxSlot,

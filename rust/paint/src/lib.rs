@@ -8,6 +8,7 @@ mod blur;
 mod clip_shape;
 mod decor;
 mod document;
+mod dropdown;
 pub mod ffi;
 mod filter;
 mod inline;
