@@ -10,26 +10,26 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-psl = { path = "../psl", version = "=1.0.11" }
-southstar-unicode = { path = "../unicode", version = "=1.0.11" }
-southstar-mime = { path = "../mime", version = "=1.0.11" }
-southstar-about-style = { path = "../about-style", version = "=1.0.11" }
-southstar-config = { path = "../config", version = "=1.0.11" }
-southstar-debuglog = { path = "../debuglog", version = "=1.0.11" }
-southstar-digest = { path = "../digest", version = "=1.0.11" }
-southstar-extensions = { path = "../extensions", version = "=1.0.11" }
-southstar-glib = { path = "../glib", version = "=1.0.11" }
-southstar-history = { path = "../history", version = "=1.0.11" }
-southstar-html-util = { path = "../html-util", version = "=1.0.11" }
-southstar-http = { path = "../http", version = "=1.0.11" }
-southstar-http-cache = { path = "../http-cache", version = "=1.0.11" }
-southstar-i18n = { path = "../i18n", version = "=1.0.11" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.11", default-features = false }
-southstar-netstore = { path = "../netstore", version = "=1.0.11" }
-southstar-netutil = { path = "../netutil", version = "=1.0.11" }
-southstar-sandbox = { path = "../sandbox", version = "=1.0.11" }
-southstar-url = { path = "../url", version = "=1.0.11" }
-southstar-pdf-viewer = { path = "../pdf-viewer", version = "=1.0.11" }
+southstar-psl = { path = "../psl", version = "=1.0.12-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.12-dev" }
+southstar-mime = { path = "../mime", version = "=1.0.12-dev" }
+southstar-about-style = { path = "../about-style", version = "=1.0.12-dev" }
+southstar-config = { path = "../config", version = "=1.0.12-dev" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.12-dev" }
+southstar-digest = { path = "../digest", version = "=1.0.12-dev" }
+southstar-extensions = { path = "../extensions", version = "=1.0.12-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.12-dev" }
+southstar-history = { path = "../history", version = "=1.0.12-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.12-dev" }
+southstar-http = { path = "../http", version = "=1.0.12-dev" }
+southstar-http-cache = { path = "../http-cache", version = "=1.0.12-dev" }
+southstar-i18n = { path = "../i18n", version = "=1.0.12-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.12-dev", default-features = false }
+southstar-netstore = { path = "../netstore", version = "=1.0.12-dev" }
+southstar-netutil = { path = "../netutil", version = "=1.0.12-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.12-dev" }
+southstar-url = { path = "../url", version = "=1.0.12-dev" }
+southstar-pdf-viewer = { path = "../pdf-viewer", version = "=1.0.12-dev" }
 
 [features]
 avif = []

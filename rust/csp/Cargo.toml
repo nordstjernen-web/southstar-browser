@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-digest = { path = "../digest", version = "=1.0.11" }
-southstar-url = { path = "../url", version = "=1.0.11" }
+southstar-digest = { path = "../digest", version = "=1.0.12-dev" }
+southstar-url = { path = "../url", version = "=1.0.12-dev" }
 
 [lints]
 workspace = true

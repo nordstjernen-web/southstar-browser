@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-digest = { path = "../digest", version = "=1.0.11" }
-southstar-html-util = { path = "../html-util", version = "=1.0.11" }
+southstar-digest = { path = "../digest", version = "=1.0.12-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.12-dev" }
 southstar-pdfjs = { version = "=6.4.299", optional = true }
 
 [features]
