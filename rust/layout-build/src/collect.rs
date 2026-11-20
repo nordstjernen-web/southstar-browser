@@ -302,7 +302,9 @@ impl<'a> Collector<'a> {
         if s.is_some_and(style_is_none) {
             return;
         }
-        if let Some(st) = s.filter(|&st| style_is_absolute_or_fixed(st)) {
+        if let Some(st) = s.filter(|&st| style_is_absolute_or_fixed(st))
+            && !same(self.state.form_control_inline, n)
+        {
             self.absolute(n, st);
             return;
         }

@@ -1373,6 +1373,7 @@ fn char_span(layout: &Layout, r: &InlineAttr) -> (Rectangle, Rectangle) {
 fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f64, y_origin: f64) {
     let (mut opt_minx, mut opt_maxx, mut opt_miny, mut opt_maxy) = (1e9, -1e9, 1e9, -1e9);
     let mut opt_count = 0;
+    let mut opt_popup = false;
     let mut opt_sel: Vec<(f64, f64)> = Vec::new();
     for r in &b.attrs() {
         if !is_field(r.kind) && r.kind != k::BUTTON {
@@ -1398,6 +1399,7 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
                 opt_maxy = ry1;
             }
             opt_count += 1;
+            opt_popup |= dom.is_some_and(southstar_dom::select::option_in_dropdown);
             if dom.and_then(|d| d.attr(c"selected")).is_some() && opt_sel.len() < 64 {
                 opt_sel.push((ry0, ry1));
             }
@@ -1565,6 +1567,9 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
         cr.set_line_width(1.0);
         cr.stroke();
         cr.restore();
+        if opt_popup {
+            crate::dropdown::record(cr, b, (px, py, pw, ph));
+        }
     }
 }
 

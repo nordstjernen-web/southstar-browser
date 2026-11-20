@@ -4,6 +4,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::Node;
+use southstar_dom::select::option_in_dropdown;
 use southstar_layout::{BoxKind, BoxRef, LinkRange, children, inline_kind};
 use southstar_style::StyleRef;
 
@@ -43,7 +44,7 @@ pub fn form_hit<'a>(
     let mut best = None;
     for c in children_stacked(b) {
         if let Some(m) = form_hit(c, cx, cy, child_inherited) {
-            best = Some(m);
+            best = topmost_form_hit(best, m);
         }
     }
     for atomic in &b.inline_atomics().unwrap_or_default() {
@@ -51,10 +52,17 @@ pub fn form_hit<'a>(
             continue;
         };
         if let Some(m) = form_hit(ab, ax, ay, child_inherited) {
-            best = Some(m);
+            best = topmost_form_hit(best, m);
         }
     }
     best.or(self_hit)
+}
+
+fn topmost_form_hit<'a>(best: Option<Node<'a>>, next: Node<'a>) -> Option<Node<'a>> {
+    match best {
+        Some(prev) if option_in_dropdown(prev) && !option_in_dropdown(next) => Some(prev),
+        _ => Some(next),
+    }
 }
 
 pub fn scrollable(root: BoxRef<'_>, x: f64, y: f64) -> Option<(BoxRef<'_>, f64, f64)> {

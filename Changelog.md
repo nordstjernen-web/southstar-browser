@@ -3,6 +3,29 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* An open drop-down list (a `<select>`'s options or `<datalist>`
+  suggestions) is painted above the rest of the page, and its rows win a
+  click over any form control under them, as a native popup does. A later
+  positioned element drew over the list: LogicEmu's title band hid part of
+  its colour scheme menu.
+* A fixed element with a transform is no longer cut off. Its layer was
+  sized from where the element sits before the transform moves it, so
+  a dialog centred with `top: 50%; transform: translate(-50%, -50%)` lost
+  its top half: LogicEmu's import box showed no text.
+* An absolutely positioned or fixed `<textarea>` or `<input>` shows its
+  value, and a positioned textarea's lines line up. The control was laid
+  out as an empty placeholder inside its own box, so the field stayed
+  blank.
+* Typing a character fires `keydown` and `keypress` before it is
+  inserted, and a cancelled `keydown` or `keypress` keeps it out of the
+  field; Enter fires `keypress` too. GTK handed printable keys to the
+  input method before the shell's key handler, which turned them straight
+  into text, so pages saw only `input` and `keyup`. The shell now reads
+  keys in the capture phase and lets a second controller carry the input
+  method, as Nordstjernen Sol does. A cancelled `mousedown` no longer
+  moves focus to what was pressed. Together these left LogicEmu's
+  terminals deaf to the keyboard: they focus a hidden textarea from a
+  cancelled `mousedown` and read characters from `keypress`.
 * Docs: SECURITY.md is now a short reporting FAQ shared by the three
   browsers of the project (Nordstjernen Sol, Northstar and Southstar).
   The threat model, sandbox and known limits move unchanged to
