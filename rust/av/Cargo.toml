@@ -10,10 +10,10 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-media-foundation = { path = "../media-foundation", version = "=1.0.11" }
+southstar-media-foundation = { path = "../media-foundation", version = "=1.0.12-dev" }
 
 [build-dependencies]
-southstar-build = { path = "../build", version = "=1.0.11" }
+southstar-build = { path = "../build", version = "=1.0.12-dev" }
 
 [features]
 resample = []

@@ -10,9 +10,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-js-engine = { path = "../js-engine", version = "=1.0.11", default-features = false }
-southstar-sandbox = { path = "../sandbox", version = "=1.0.11" }
-southstar-webcrypto = { path = "../webcrypto", version = "=1.0.11" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.12-dev", default-features = false }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.12-dev" }
+southstar-webcrypto = { path = "../webcrypto", version = "=1.0.12-dev" }
 
 [lints]
 workspace = true

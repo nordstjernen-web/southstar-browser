@@ -1,6 +1,9 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 1.0.12-dev:
+======
+
 Southstar Browser 1.0.11:
 ======
 * Web Audio plays sound. An `AudioContext` renders its graph in the
