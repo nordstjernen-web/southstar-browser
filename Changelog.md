@@ -3,6 +3,21 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* Web Audio plays sound. An `AudioContext` renders its graph in the
+  renderer, a little ahead of its clock, and streams it to the
+  `southstar-audio` helper through a new `pcm` command; before, the
+  context was a stub that never produced a sample. AudioParam automation
+  works (`setValueAtTime`, linear and exponential ramps,
+  `setTargetAtTime`, `setValueCurveAtTime`, `cancelScheduledValues`,
+  `cancelAndHoldAtTime`; a ramp with no earlier event starts from the
+  current value now, and assigning `value` cancels pending automation),
+  and oscillators, buffer sources, filters, compressors and delays keep
+  their state from one block to the next. `resume()`, `suspend()` and
+  `close()` change the state and fire `statechange`, `currentTime`
+  advances while the context runs, and a context starts running only once
+  the user has activated the page. A source that was never started is
+  silent, and OfflineAudioContext renders with the same automation.
+  LogicEmu's music note component plays its notes.
 * An open drop-down list (a `<select>`'s options or `<datalist>`
   suggestions) is painted above the rest of the page, and its rows win a
   click over any form control under them, as a native popup does. A later

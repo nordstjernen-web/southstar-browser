@@ -1,4 +1,4 @@
-//! Southstar — the helper's line protocol: open, reload, play, pause, seek, volume, loop and stop commands in, meta, pos and ended events out.
+//! Southstar — the helper's line protocol: open, reload, play, pause, seek, volume, loop, pcm and stop commands in, meta, pos and ended events out.
 //!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
@@ -425,7 +425,39 @@ impl Helper {
         }
     }
 
+    /// `pcm <token> <rate> <channels> <base64 s16le>`: queues a chunk of audio
+    /// the page rendered itself on the token's stream.
+    fn pcm(&mut self, token: &[u8], tokens: &mut Tokens<'_>) {
+        let rate = tokens.next().map_or(0, atoi);
+        let channels = tokens.next().map_or(0, atoi);
+        let (Some(data), true, true) = (
+            tokens.next(),
+            (3000..=192_000).contains(&rate),
+            (1..=2).contains(&channels),
+        ) else {
+            return;
+        };
+        if !self.available() {
+            return;
+        }
+        let Some(bytes) = southstar_helper_ffi::download::base64_decode(data) else {
+            return;
+        };
+        let samples: Vec<f32> = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| f32::from(i16::from_le_bytes(*b)) / 32768.0)
+            .collect();
+        let channels = channels as usize;
+        let whole = samples.len() - samples.len() % channels;
+        if let Some(stream) = mixer::lock().stream(token) {
+            stream.push(&samples[..whole], channels, rate as u32);
+        }
+    }
+
     fn stop(&mut self, token: &[u8]) {
+        mixer::lock().close_stream(token);
         let found = mixer::lock().find(token);
         if let Some(i) = found {
             self.release(i);
@@ -564,6 +596,7 @@ fn command(helper: &mut Helper, line: &[u8]) -> bool {
         b"volume" => helper.volume(token, tokens.number(1.0)),
         b"loop" => helper.set_loop(token, tokens.next().is_some_and(|v| atoi(v) as i32 != 0)),
         b"stop" => helper.stop(token),
+        b"pcm" => helper.pcm(token, &mut tokens),
         b"reload" => helper.reload(token, tokens.rest()),
         _ => {}
     }

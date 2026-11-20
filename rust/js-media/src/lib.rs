@@ -11,6 +11,7 @@ pub mod eme;
 pub(crate) mod ffi;
 mod hooks;
 mod mse;
+mod realtime;
 pub mod support;
 pub mod tracks;
 
@@ -21,9 +22,10 @@ pub use ffi::{
     video_event,
 };
 
+pub use realtime::busy as webaudio_busy;
 pub(crate) use southstar_js_bind::make_constructor;
 pub(crate) use southstar_js_engine::props::{bind, get, set, set_str, truthy};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{BoundFn, Scope, Value};
 
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
@@ -33,6 +35,18 @@ pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
         .to_number(&length)
         .map(|n| southstar_js_engine::int64_modulo(n) as u32)
         .unwrap_or(0)
+}
+
+pub(crate) fn bind_data(
+    scope: &mut Scope<'_>,
+    object: &Value,
+    name: &str,
+    arity: u32,
+    f: BoundFn,
+    data: &[Value],
+) {
+    let function = scope.bound_function(name, arity, f, data);
+    set(scope, object, name, function);
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, message: &str) -> Value {

@@ -35,7 +35,7 @@ impl Handler for Sink {
     }
 }
 
-fn base64_decode(input: &[u8]) -> Option<Vec<u8>> {
+pub fn base64_decode(input: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(input.len() * 3 / 4);
     let mut acc = 0u32;
     let mut bits = 0;

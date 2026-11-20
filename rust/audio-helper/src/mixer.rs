@@ -1,8 +1,9 @@
-//! Southstar — the players the audio callback mixes into the 44.1 kHz stereo device, the clock they publish, and the silent fallback output.
+//! Southstar — the players and pushed PCM streams the audio callback mixes into the 44.1 kHz stereo device, the clock the players publish, and the silent fallback output.
 //!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
@@ -16,6 +17,55 @@ pub const MAX_SECONDS: usize = 1800;
 pub const MAX_FLOATS: usize = 200 * 1024 * 1024;
 const TOKEN_MAX: usize = 63;
 const NULL_FRAMES: usize = 1024;
+pub const MAX_STREAMS: usize = 16;
+/// A stream holding more than this many queued frames is trimmed to STREAM_KEEP.
+const STREAM_HIGH: usize = DEVICE_RATE / 2;
+const STREAM_KEEP: usize = DEVICE_RATE / 5;
+
+/// Audio a page renders itself (Web Audio) and pushes in chunks; it plays as it
+/// arrives, resampled to the device rate.
+pub struct Stream {
+    pub token: Vec<u8>,
+    queue: VecDeque<[f32; 2]>,
+    /// The last input frame, the start of the next interpolation step.
+    last: [f32; 2],
+    /// Position between `last` and the next input frame, in input frames.
+    phase: f64,
+}
+
+impl Stream {
+    fn new(token: &[u8]) -> Stream {
+        Stream {
+            token: token[..token.len().min(TOKEN_MAX)].to_vec(),
+            queue: VecDeque::new(),
+            last: [0.0; 2],
+            phase: 0.0,
+        }
+    }
+
+    /// Queues interleaved frames of `channels` (1 or 2) at `rate`, resampling
+    /// linearly to the device rate.
+    pub fn push(&mut self, samples: &[f32], channels: usize, rate: u32) {
+        let step = f64::from(rate) / DEVICE_RATE as f64;
+        for frame in samples.chunks_exact(channels) {
+            let next = [frame[0], frame[channels - 1]];
+            while self.phase < 1.0 {
+                let t = self.phase as f32;
+                self.queue.push_back([
+                    self.last[0] + (next[0] - self.last[0]) * t,
+                    self.last[1] + (next[1] - self.last[1]) * t,
+                ]);
+                self.phase += step;
+            }
+            self.phase -= 1.0;
+            self.last = next;
+        }
+        if self.queue.len() > STREAM_HIGH {
+            let drop = self.queue.len() - STREAM_KEEP;
+            self.queue.drain(..drop);
+        }
+    }
+}
 
 pub struct Player {
     pub token: Vec<u8>,
@@ -82,11 +132,13 @@ impl Player {
 
 pub struct Mixer {
     pub players: [Player; MAX_PLAYERS],
+    pub streams: Vec<Stream>,
     pub clock: Option<Clock>,
 }
 
 static MIXER: Mutex<Mixer> = Mutex::new(Mixer {
     players: [Player::EMPTY; MAX_PLAYERS],
+    streams: Vec::new(),
     clock: None,
 });
 
@@ -112,6 +164,25 @@ impl Mixer {
         };
         self.publish(i);
         Some(i)
+    }
+
+    /// The stream for `token`, opened on first use; None when all are in use.
+    pub fn stream(&mut self, token: &[u8]) -> Option<&mut Stream> {
+        let token = &token[..token.len().min(TOKEN_MAX)];
+        let i = match self.streams.iter().position(|s| s.token == token) {
+            Some(i) => i,
+            None if self.streams.len() < MAX_STREAMS => {
+                self.streams.push(Stream::new(token));
+                self.streams.len() - 1
+            }
+            None => return None,
+        };
+        self.streams.get_mut(i)
+    }
+
+    pub fn close_stream(&mut self, token: &[u8]) {
+        let token = &token[..token.len().min(TOKEN_MAX)];
+        self.streams.retain(|s| s.token != token);
     }
 
     pub fn release(&mut self, i: usize) {
@@ -168,6 +239,15 @@ impl Mixer {
             }
             if !p.playing {
                 self.publish(i);
+            }
+        }
+        for stream in &mut self.streams {
+            for frame in out.as_chunks_mut::<2>().0 {
+                let Some([l, r]) = stream.queue.pop_front() else {
+                    break;
+                };
+                frame[0] += l;
+                frame[1] += r;
             }
         }
         for sample in &mut out[..frames * 2] {

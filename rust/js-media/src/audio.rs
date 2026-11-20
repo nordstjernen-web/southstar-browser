@@ -8,8 +8,8 @@ use southstar_js_engine::props::noop;
 use southstar_js_engine::{ElementType, Scope, Value};
 
 use crate::{
-    JsResult, array_length, bind, dom_exception, ffi, get, make_constructor, rejected, resolved,
-    set, set_str, truthy,
+    JsResult, array_length, bind, dom_exception, ffi, get, make_constructor, realtime, rejected,
+    resolved, set, set_str, truthy,
 };
 
 const MAX_CHANNELS: i32 = 32;
@@ -90,10 +90,6 @@ fn shape_ok(channels: i32, length: i32, sample_rate: f64) -> bool {
         && length >= 1
         && channels as u64 * length as u64 <= MAX_SAMPLES
         && (3000.0..=768000.0).contains(&sample_rate)
-}
-
-fn return_this(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
-    Ok(this.clone())
 }
 
 fn resolved_undefined(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
@@ -209,19 +205,36 @@ fn stop(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     schedule(scope, this, args, "_stopTime")
 }
 
-fn make_param(scope: &mut Scope<'_>, value: f64) -> Value {
+fn param_method(scope: &mut Scope<'_>, this: &Value, args: &[Value], data: &[Value]) -> JsResult {
+    let which = match data.first() {
+        Some(which) => scope.to_int32(which)?,
+        None => -1,
+    };
+    southstar_webaudio::param_method(scope, this, args, which)
+}
+
+fn make_param(scope: &mut Scope<'_>, value: f64, context: &Value) -> Value {
     let param = scope.new_object();
     set(scope, &param, "value", Value::number(value));
     set(scope, &param, "defaultValue", Value::number(value));
     set(scope, &param, "minValue", Value::number(-3.4e38));
     set(scope, &param, "maxValue", Value::number(3.4e38));
-    for (name, arity) in PARAM_METHODS {
-        bind(scope, &param, name, arity, return_this);
+    set(scope, &param, "_ac", context.clone());
+    for (which, (name, arity)) in PARAM_METHODS.into_iter().enumerate() {
+        crate::bind_data(
+            scope,
+            &param,
+            name,
+            arity,
+            param_method,
+            &[Value::int(which as i32)],
+        );
     }
+    let _ = scope.define_to_string_tag(&param, "AudioParam");
     param
 }
 
-fn make_node(scope: &mut Scope<'_>, kind: &str) -> Value {
+fn make_node(scope: &mut Scope<'_>, kind: &str, context: &Value) -> Value {
     let node = scope.new_object();
     set(scope, &node, "numberOfInputs", Value::int(1));
     set(scope, &node, "numberOfOutputs", Value::int(1));
@@ -229,7 +242,12 @@ fn make_node(scope: &mut Scope<'_>, kind: &str) -> Value {
     set_str(scope, &node, "channelCountMode", "max");
     set_str(scope, &node, "channelInterpretation", "speakers");
     for (name, value) in NODE_PARAMS {
-        let param = make_param(scope, value);
+        let value = match (kind, name) {
+            ("biquad", "frequency") => 350.0,
+            ("biquad", "gain") => 0.0,
+            _ => value,
+        };
+        let param = make_param(scope, value, context);
         set(scope, &node, name, param);
     }
     set(scope, &node, "buffer", Value::null());
@@ -239,11 +257,12 @@ fn make_node(scope: &mut Scope<'_>, kind: &str) -> Value {
     set(scope, &node, "fftSize", Value::int(2048));
     set(scope, &node, "frequencyBinCount", Value::int(1024));
     for (name, value) in SHAPING_PARAMS {
-        let param = make_param(scope, value);
+        let param = make_param(scope, value, context);
         set(scope, &node, name, param);
     }
     set(scope, &node, "curve", Value::null());
     set_str(scope, &node, "_kind", kind);
+    set(scope, &node, "context", context.clone());
     let inputs = scope.new_array();
     set(scope, &node, "_inputs", inputs);
     let listeners = scope.new_array();
@@ -263,16 +282,30 @@ fn make_node(scope: &mut Scope<'_>, kind: &str) -> Value {
     node
 }
 
-fn create_node(scope: &mut Scope<'_>, _: &Value, _: &[Value], data: &[Value]) -> JsResult {
+fn create_node(scope: &mut Scope<'_>, this: &Value, args: &[Value], data: &[Value]) -> JsResult {
     let kind = match data.first() {
         Some(kind) => scope.to_string(kind)?,
         None => "gain".to_owned(),
     };
-    Ok(make_node(scope, &kind))
+    let node = make_node(scope, &kind, this);
+    if kind == "delay"
+        && let Some(max) = args.first().filter(|max| !max.is_undefined())
+    {
+        let max = scope.to_number(max)?;
+        if !(max > 0.0 && max < 180.0) {
+            return Err(dom_exception(
+                scope,
+                "NotSupportedError",
+                "createDelay: maxDelayTime must be greater than 0 and less than 180",
+            ));
+        }
+        set(scope, &node, "_maxDelay", Value::number(max));
+    }
+    Ok(node)
 }
 
-fn create_media_stream_source(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
-    let node = make_node(scope, "mediastreamsource");
+fn create_media_stream_source(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    let node = make_node(scope, "mediastreamsource", this);
     if args.first().is_some_and(Value::is_object) {
         set(scope, &node, "_micSrc", Value::boolean(true));
     }
@@ -381,7 +414,7 @@ fn build_context(scope: &mut Scope<'_>, sample_rate: f64) -> Value {
     set_str(scope, &context, "state", "running");
     set(scope, &context, "baseLatency", Value::number(0.02));
     set(scope, &context, "outputLatency", Value::number(0.02));
-    let destination = make_node(scope, "destination");
+    let destination = make_node(scope, "destination", &context);
     set(scope, &context, "destination", destination);
     let listener = scope.new_object();
     set(scope, &context, "listener", listener);
@@ -414,7 +447,9 @@ fn build_context(scope: &mut Scope<'_>, sample_rate: f64) -> Value {
 }
 
 fn audio_context(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
-    Ok(build_context(scope, DEFAULT_RATE))
+    let context = build_context(scope, realtime::RATE);
+    realtime::attach(scope, &context)?;
+    Ok(context)
 }
 
 fn copy_into_channels(scope: &mut Scope<'_>, buffer: &Value, channels: i32, mix: &[f32]) {
