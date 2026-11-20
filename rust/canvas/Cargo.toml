@@ -10,22 +10,22 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-raster = { path = "../raster", version = "=1.0.11-dev" }
-southstar-unicode = { path = "../unicode", version = "=1.0.11-dev" }
-southstar-cairo = { path = "../cairo", version = "=1.0.11-dev" }
-southstar-css = { path = "../css", version = "=1.0.11-dev" }
-southstar-digest = { path = "../digest", version = "=1.0.11-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.11-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.11-dev" }
-southstar-image = { path = "../image", version = "=1.0.11-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.11-dev", default-features = false }
-southstar-js-images = { path = "../js-images", version = "=1.0.11-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.11-dev" }
-southstar-layout = { path = "../layout", version = "=1.0.11-dev" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.11-dev" }
-southstar-text = { path = "../text", version = "=1.0.11-dev" }
-southstar-texture = { path = "../texture", version = "=1.0.11-dev" }
-southstar-video = { path = "../video", version = "=1.0.11-dev" }
+southstar-raster = { path = "../raster", version = "=1.0.11" }
+southstar-unicode = { path = "../unicode", version = "=1.0.11" }
+southstar-cairo = { path = "../cairo", version = "=1.0.11" }
+southstar-css = { path = "../css", version = "=1.0.11" }
+southstar-digest = { path = "../digest", version = "=1.0.11" }
+southstar-dom = { path = "../dom", version = "=1.0.11" }
+southstar-glib = { path = "../glib", version = "=1.0.11" }
+southstar-image = { path = "../image", version = "=1.0.11" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.11", default-features = false }
+southstar-js-images = { path = "../js-images", version = "=1.0.11" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.11" }
+southstar-layout = { path = "../layout", version = "=1.0.11" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.11" }
+southstar-text = { path = "../text", version = "=1.0.11" }
+southstar-texture = { path = "../texture", version = "=1.0.11" }
+southstar-video = { path = "../video", version = "=1.0.11" }
 
 [features]
 webgpu = []

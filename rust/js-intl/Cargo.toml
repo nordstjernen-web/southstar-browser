@@ -10,12 +10,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.11-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.11-dev" }
-southstar-i18n = { path = "../i18n", version = "=1.0.11-dev" }
-southstar-intl-core = { path = "../intl-core", version = "=1.0.11-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.11-dev", default-features = false }
-southstar-text = { path = "../text", version = "=1.0.11-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.11" }
+southstar-glib = { path = "../glib", version = "=1.0.11" }
+southstar-i18n = { path = "../i18n", version = "=1.0.11" }
+southstar-intl-core = { path = "../intl-core", version = "=1.0.11" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.11", default-features = false }
+southstar-text = { path = "../text", version = "=1.0.11" }
 
 [lints]
 workspace = true

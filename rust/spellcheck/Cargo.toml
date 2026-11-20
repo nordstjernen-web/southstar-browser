@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-glib = { path = "../glib", version = "=1.0.11-dev", optional = true }
+southstar-glib = { path = "../glib", version = "=1.0.11", optional = true }
 
 [features]
 enchant = ["dep:southstar-glib"]
