@@ -19,7 +19,7 @@ install_apt() {
         build-essential clang pkg-config git zip unzip curl \
         dpkg-dev patchelf ca-certificates \
         libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev libuchardet-dev \
-        libsqlite3-dev libseccomp-dev libwebp-dev libavif-dev libsdl3-dev
+        libsqlite3-dev libseccomp-dev libwebp-dev libavif-dev libsdl3-dev publicsuffix
     apt-get install -y --no-install-recommends \
         libfontconfig-dev libharfbuzz-dev libfreetype-dev libavif-dev || true
     # FFmpeg libav* backs the inline WebM path (VP9/VP8 video + Opus/Vorbis
@@ -61,7 +61,7 @@ install_zypper() {
         gcc clang pkgconf-pkg-config git zip unzip curl \
         rpm-build patchelf ca-certificates \
         gtk4-devel libepoxy-devel libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel \
-        sqlite3-devel libseccomp-devel libwebp-devel libavif-devel rust cargo
+        sqlite3-devel libseccomp-devel libwebp-devel libavif-devel publicsuffix rust cargo
     # SDL3 backs the auto-detected audio helper; keep it out of the required
     # set so an unavailable/mid-sync package degrades to no audio, not a failed
     # nightly. Its own line (not the optional group) so it is independent of
@@ -70,7 +70,7 @@ install_zypper() {
         SDL3-devel \
         || echo "nightly-distro-build(opensuse): SDL3 unavailable; audio helper skipped" >&2
     zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
-        fontconfig-devel harfbuzz-devel freetype-develel libavif-devel || true
+        fontconfig-devel harfbuzz-devel freetype2-devel libavif-devel || true
     # FFmpeg libav* (inline WebM: VP9/VP8 + Opus/Vorbis). cargo xtask requires it on
     # Linux, so a failure here is fatal; if the default repos come up short,
     # the container needs Packman enabled.
