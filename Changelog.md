@@ -230,6 +230,10 @@ Southstar Browser 1.0.11:
   100 ms per pass, hundreds of times while the page built. The parent of
   an element matching `X` is now the selector's anchor, and adding,
   removing or re-keying such a child restyles that parent.
+* Dependencies updated to their newest compatible releases, among them
+  rustls-webpki 0.103.17, rustls-pki-types 1.16.0, wasmi 2.0.2,
+  harfrust 0.16.1 and brotli-decompressor 6.3.2. ICU4X stays at 2.3:
+  boa_icu_provider 0.22, its newest release, requires ICU ~2.3.
 
 Southstar Browser 1.0.10:
 ======
