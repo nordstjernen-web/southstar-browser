@@ -16,7 +16,7 @@ and JavaScript standards, written in Rust and started in 2026.
 **Windows:** install Southstar Browser from the
 [Microsoft Store](https://apps.microsoft.com/detail/9N9J5HRNJ7RQ).
 
-![Southstar Browser showing Duck.ai](docs/screenshot.png)
+![Southstar Browser 1.0.11 showing a YouTube video page](docs/screenshot.png)
 
 **JavaScript engine:** Southstar runs page JavaScript on
 [Boa](https://github.com/boa-dev/boa), a JavaScript engine written in Rust
