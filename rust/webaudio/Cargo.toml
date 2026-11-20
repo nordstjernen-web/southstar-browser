@@ -1,6 +1,6 @@
 [package]
 name = "southstar-webaudio"
-description = "Offline Web Audio rendering: mixes the AudioNode graph an OfflineAudioContext builds into one channel"
+description = "Web Audio rendering: AudioParam automation and the AudioNode graph of an AudioContext or OfflineAudioContext rendered in 128-frame blocks into one channel"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

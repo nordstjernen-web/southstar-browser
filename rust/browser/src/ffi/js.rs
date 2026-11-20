@@ -105,6 +105,7 @@ impl Js {
 
     pub fn needs_tick(self) -> bool {
         southstar_js_lifecycle::needs_tick(self.handle())
+            || southstar_js_media::webaudio_busy(Some(self.handle()))
     }
 
     pub fn dispatch_resize(self) {

@@ -14,17 +14,17 @@ use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
 
 use crate::hooks;
-use crate::{audio, element, eme, mse, support, tracks};
+use crate::{audio, element, eme, mse, realtime, support, tracks};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn from_ptr(js: Option<Page>) -> Js {
+    pub(crate) fn from_ptr(js: Option<Page>) -> Js {
         Js(js)
     }
 
-    fn ptr(self) -> Option<Page> {
+    pub(crate) fn ptr(self) -> Option<Page> {
         self.0
     }
 
@@ -69,6 +69,10 @@ pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
 
 pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
     nsr_event_new(scope).unwrap_or_else(|_| Value::undefined())
+}
+
+pub(crate) fn dispatch_object(scope: &mut Scope<'_>, target: &Value, event: &Value) {
+    let _ = nsr_target_dispatchEvent(scope, target, core::slice::from_ref(event));
 }
 
 pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {
@@ -251,6 +255,7 @@ fn init(js: Page) {
 }
 
 fn teardown(js: Page) {
+    realtime::teardown(Js::from_ptr(Some(js)));
     hooks::teardown(Js::from_ptr(Some(js)));
 }
 

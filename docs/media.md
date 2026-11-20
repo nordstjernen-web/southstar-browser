@@ -96,6 +96,18 @@ itself. The inline player drives the helper — `open`/`play`/`pause`/`seek`/`st
 ride the renderer→shell render channel, and looping re-syncs the audio at each
 wrap.
 
+### Web Audio
+
+A realtime `AudioContext` renders its node graph in the renderer
+(`rust/webaudio`, 128-frame blocks with AudioParam automation and per-node
+state; `rust/js-media/src/realtime.rs` drives it). While the context runs, a
+10 ms page timer renders about 0.12 s ahead of the context's wall clock and
+sends the result as `pcm <token> 22050 1 <base64 s16le>` lines on the same
+render channel; the helper queues each token's chunks on a stream, resamples
+it to the device rate and mixes it with the players. `close()` sends
+`stop <token>`. A context starts `running` only once the user has activated
+the page; before that it, and a `resume()`, stay `suspended`.
+
 ## Captions and subtitles (`<track>`)
 
 A `<video>` may carry a `<track>` child pointing at a
