@@ -793,8 +793,12 @@ pub fn run_one(
     if o.settle_ms > 0 {
         settle(o.settle_ms, &ctx);
     }
+    let mut remaining_actions = None;
     if let Some(actions) = nonempty(o.actions) {
-        crate::input::run_actions(&ctx, &nav, actions.to_bytes());
+        let rest = crate::input::run_actions(&ctx, &nav, actions.to_bytes());
+        if !rest.iter().all(|b| b.is_ascii_whitespace() || *b == b';') {
+            remaining_actions = Some(c_string_until_nul(rest));
+        }
     }
 
     let pending = nav.pending_url.borrow_mut().take();
@@ -827,7 +831,7 @@ pub fn run_one(
         }
         drop(decoded);
         let next_opts = Opts {
-            actions: None,
+            actions: remaining_actions.as_deref(),
             ..*o
         };
         let ct = next_ct.as_deref().map(c_string_until_nul);

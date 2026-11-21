@@ -850,6 +850,26 @@ fn clip_moved(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> bool {
         || (a.3 - b.3).abs() > 0.5
 }
 
+fn is_text_field(b: BoxRef<'_>) -> bool {
+    node_of(b).is_some_and(|n| {
+        n.name_is_tag(southstar_dom::Tag::Input)
+            && n.attr(c"type").is_none_or(|t| {
+                [
+                    &b""[..],
+                    b"text",
+                    b"search",
+                    b"email",
+                    b"url",
+                    b"tel",
+                    b"number",
+                    b"password",
+                ]
+                .iter()
+                .any(|w| t.to_bytes().eq_ignore_ascii_case(w))
+            })
+    })
+}
+
 fn overflow_kw_clips(ov: Option<&CStr>) -> bool {
     ov.is_some_and(|ov| {
         let ov = ov.to_bytes();
@@ -1375,8 +1395,11 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
             .and_then(Node::name)
             .is_some_and(|n| matches!(n.to_bytes(), b"html" | b"body"));
     let mut cull_shift = 0.0;
-    let mut clip_overflow =
-        !is_root && (overflow_kw_clips(ovx) || overflow_kw_clips(ovy) || contains_paint(style));
+    let mut clip_overflow = !is_root
+        && (overflow_kw_clips(ovx)
+            || overflow_kw_clips(ovy)
+            || contains_paint(style)
+            || is_text_field(b));
     if clip_overflow
         && matches!(
             b.kind(),

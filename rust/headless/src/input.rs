@@ -677,12 +677,19 @@ fn eval_action(fc: &Ctx, src: &CStr, origin: &CStr) {
     ffi::consume_mutated(fc.js);
 }
 
-pub fn run_actions(fc: &Ctx, nav: &NavCapture, spec: &[u8]) {
+pub fn run_actions<'a>(fc: &Ctx, nav: &NavCapture, spec: &'a [u8]) -> &'a [u8] {
     if spec.is_empty() {
-        return;
+        return spec;
     }
     relayout(fc);
-    for action in spec.split(|&b| b == b';') {
+    let mut start = 0;
+    while start < spec.len() {
+        let end = spec[start..]
+            .iter()
+            .position(|&b| b == b';')
+            .map_or(spec.len(), |at| start + at);
+        let action = &spec[start..end];
+        start = (end + 1).min(spec.len());
         let a = strip(action);
         if a.is_empty() {
             continue;
@@ -768,7 +775,8 @@ pub fn run_actions(fc: &Ctx, nav: &NavCapture, spec: &[u8]) {
         }
         relayout(fc);
         if nav.has_pending() {
-            break;
+            return &spec[start..];
         }
     }
+    &spec[spec.len()..]
 }
