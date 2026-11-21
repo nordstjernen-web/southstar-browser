@@ -301,7 +301,60 @@ fn create_node(scope: &mut Scope<'_>, this: &Value, args: &[Value], data: &[Valu
         }
         set(scope, &node, "_maxDelay", Value::number(max));
     }
+    if kind == "scriptprocessor" {
+        script_processor_setup(scope, &node, this, args)?;
+    }
     Ok(node)
+}
+
+fn int_arg(scope: &mut Scope<'_>, args: &[Value], index: usize, default: i32) -> JsResult<i32> {
+    match args.get(index).filter(|value| !value.is_undefined()) {
+        Some(value) => scope.to_int32(value),
+        None => Ok(default),
+    }
+}
+
+fn script_processor_setup(
+    scope: &mut Scope<'_>,
+    node: &Value,
+    context: &Value,
+    args: &[Value],
+) -> JsResult<()> {
+    let mut size = int_arg(scope, args, 0, 0)?;
+    if size == 0 {
+        size = 1024;
+    }
+    if !(256..=16384).contains(&size) || size.count_ones() != 1 {
+        return Err(dom_exception(
+            scope,
+            "IndexSizeError",
+            "createScriptProcessor: bufferSize must be a power of two between 256 and 16384",
+        ));
+    }
+    let inputs = int_arg(scope, args, 1, 2)?;
+    let outputs = int_arg(scope, args, 2, 2)?;
+    if !(0..=MAX_CHANNELS).contains(&inputs)
+        || !(0..=MAX_CHANNELS).contains(&outputs)
+        || inputs + outputs == 0
+    {
+        return Err(dom_exception(
+            scope,
+            "IndexSizeError",
+            "createScriptProcessor: channel counts out of range",
+        ));
+    }
+    let rate = get(scope, context, "sampleRate");
+    let rate = scope.to_number(&rate).unwrap_or(DEFAULT_RATE);
+    set(scope, node, "bufferSize", Value::int(size));
+    set(scope, node, "numberOfInputs", Value::int(1));
+    set(scope, node, "numberOfOutputs", Value::int(1));
+    set(scope, node, "onaudioprocess", Value::null());
+    let input_buffer = make_buffer(scope, inputs.max(1), size, rate);
+    set(scope, node, "_spInBuf", input_buffer);
+    let output_buffer = make_buffer(scope, outputs.max(1), size, rate);
+    set(scope, node, "_spOutBuf", output_buffer);
+    let _ = scope.define_to_string_tag(node, "ScriptProcessorNode");
+    Ok(())
 }
 
 fn create_media_stream_source(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {

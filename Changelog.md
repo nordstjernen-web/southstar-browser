@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* `ScriptProcessorNode` plays sound. Each time a `bufferSize` of input
+  has gathered, the context calls `onaudioprocess` with real
+  `inputBuffer` and `outputBuffer` AudioBuffers and plays what the
+  handler wrote, one buffer later. Emscripten's SDL audio, which
+  Qwasm and most WebAssembly game ports use, writes its samples that
+  way; before, the node was silent and its handler never ran.
+  `createScriptProcessor` checks its buffer size and channel counts.
 * A `MessagePort` that leads to a worker transfers ports and other
   transferables in its `postMessage`. Comlink-based libraries such as
   libarchive.js hand a callback port to their worker that way, and the

@@ -582,6 +582,100 @@ fn waveshaper(scope: &mut Scope, node: &Value, out: &mut [f32]) {
     });
 }
 
+fn script_refill(scope: &mut Scope, node: &Value, size: usize, input: &[f32], t0: f64) -> Vec<f32> {
+    let input_buffer = get(scope, node, "_spInBuf");
+    let output_buffer = get(scope, node, "_spOutBuf");
+    let input_channels = get(scope, &input_buffer, "_chans");
+    let output_channels = get(scope, &output_buffer, "_chans");
+    let input_bytes: Vec<u8> = input.iter().flat_map(|s| s.to_ne_bytes()).collect();
+    for index in 0..input_count(scope, &input_channels) {
+        let channel = scope
+            .get_index(&input_channels, index)
+            .unwrap_or_else(|_| Value::undefined());
+        scope.with_buffer_bytes_mut(&channel, |bytes| {
+            let count = bytes.len().min(input_bytes.len());
+            bytes[..count].copy_from_slice(&input_bytes[..count]);
+            bytes[count..].fill(0);
+        });
+    }
+    let count = input_count(scope, &output_channels);
+    for index in 0..count {
+        let channel = scope
+            .get_index(&output_channels, index)
+            .unwrap_or_else(|_| Value::undefined());
+        scope.with_buffer_bytes_mut(&channel, |bytes| bytes.fill(0));
+    }
+    let handler = get(scope, node, "onaudioprocess");
+    if scope.is_function(&handler) {
+        let event = scope.new_object();
+        let kind = scope.string("audioprocess");
+        set(scope, &event, "type", kind);
+        set(scope, &event, "target", node.clone());
+        set(scope, &event, "inputBuffer", input_buffer);
+        set(scope, &event, "outputBuffer", output_buffer);
+        set(scope, &event, "playbackTime", Value::number(t0));
+        let _ = scope.call(&handler, node, &[event]);
+    }
+    let mut mix = vec![0.0f32; size];
+    for index in 0..count {
+        let channel = scope
+            .get_index(&output_channels, index)
+            .unwrap_or_else(|_| Value::undefined());
+        with_float32(scope, &channel, |samples| {
+            for (i, sample) in mix.iter_mut().enumerate().take(samples.len()) {
+                *sample += samples.get(i) / count as f32;
+            }
+        });
+    }
+    mix
+}
+
+/// A ScriptProcessorNode: collects its input into `bufferSize` frames, and
+/// each time a buffer is full calls `onaudioprocess` and plays what the
+/// handler wrote to `outputBuffer`, one buffer later.
+fn script_processor(scope: &mut Scope, node: &Value, out: &mut [f32], walk: &Walk, rate: f64) {
+    let size = number(scope, node, "bufferSize", 0.0) as usize;
+    if size == 0 {
+        out.fill(0.0);
+        return;
+    }
+    let mut pending = get(scope, node, "_spMix");
+    if float32_len(scope, &pending) != Some(2 * size) {
+        let Some(array) = new_typed(scope, "Float32Array", 2 * size) else {
+            return;
+        };
+        set(scope, node, "_spMix", array.clone());
+        set(scope, node, "_spPos", Value::number(size as f64));
+        pending = array;
+    }
+    let mut pos = number(scope, node, "_spPos", size as f64) as usize;
+    let Some(mut buffers) = with_float32(scope, &pending, |s| {
+        (0..s.len()).map(|i| s.get(i)).collect::<Vec<f32>>()
+    }) else {
+        return;
+    };
+    for (i, sample) in out.iter_mut().enumerate() {
+        if pos >= size {
+            let input = buffers[size..].to_vec();
+            let t = walk.t0 + i as f64 / rate;
+            let produced = script_refill(scope, node, size, &input, t);
+            buffers[..size].copy_from_slice(&produced);
+            pos = 0;
+        }
+        let input = *sample;
+        *sample = buffers[pos];
+        buffers[size + pos] = input;
+        pos += 1;
+    }
+    let bytes: Vec<u8> = buffers.iter().flat_map(|s| s.to_ne_bytes()).collect();
+    scope.with_buffer_bytes_mut(&pending, |out| {
+        if out.len() == bytes.len() {
+            out.copy_from_slice(&bytes);
+        }
+    });
+    set(scope, node, "_spPos", Value::number(pos as f64));
+}
+
 fn scale(out: &mut [f32], gain: f64) {
     for sample in out.iter_mut() {
         *sample = (f64::from(*sample) * gain) as f32;
@@ -613,6 +707,7 @@ fn render(scope: &mut Scope, node: &Value, rate: f64, out: &mut [f32], walk: &mu
         b"biquad" => biquad(scope, node, rate, out, walk),
         b"delay" => delay(scope, node, rate, out, walk),
         b"waveshaper" => waveshaper(scope, node, out),
+        b"scriptprocessor" => script_processor(scope, node, out, walk, rate),
         b"stereopanner" | b"panner" => {
             let gain = 1.0 - param_at(scope, node, "pan", 0.0, t0).abs() * 0.5;
             scale(out, gain);
