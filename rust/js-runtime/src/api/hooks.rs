@@ -47,6 +47,7 @@ hook_setter!(set_window_action_hook, window_action, UrlFn);
 hook_setter!(set_viewport_scroll_hook, viewport_scroll, ViewportScrollFn);
 hook_setter!(set_layout_flush_hook, layout_flush, DataFn);
 hook_setter!(set_style_flush_hook, style_flush, DataFn);
+hook_setter!(set_repaint_hook, repaint, DataFn);
 hook_setter!(set_load_delay_hook, load_delay, DelayFn);
 
 pub fn navigate(js: Option<Page>, url: &CStr, reload: bool) -> bool {

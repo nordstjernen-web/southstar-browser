@@ -187,6 +187,7 @@ pub struct NsBrowser {
     pub pending_scroll_y: Cell<c_int>,
     pub pending_scroll: Flag,
     pub pending_scroll_smooth: Flag,
+    pub repaint_requested: Flag,
     pub scroll_anchor: NodeSlot,
     pub scroll_anchor_y: Cell<c_int>,
     img_sessions: RefCell<Vec<Session>>,

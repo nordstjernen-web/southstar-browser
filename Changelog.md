@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* A WebGL canvas drawn from a timer or an event handler, not only
+  from `requestAnimationFrame`, reaches the screen as soon as it is
+  drawn. The page's repaint request had no receiver in the browser
+  window, so such a canvas only updated when something else, such as
+  a key press, redrew the page; Qwasm's game loop looked frozen.
 * `ScriptProcessorNode` plays sound. Each time a `bufferSize` of input
   has gathered, the context calls `onaudioprocess` with real
   `inputBuffer` and `outputBuffer` AudioBuffers and plays what the
