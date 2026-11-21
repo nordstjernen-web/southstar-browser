@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Pointer lock works in the browser window. When a page calls
+  `requestPointerLock()`, the tab hides the cursor, keeps it in the
+  page (on Windows it is confined to the view and re-centred after
+  each move) and sends mouse motion to the locked element as
+  `movementX`/`movementY`, so first-person games such as Qwasm can be
+  steered with the mouse. Esc or leaving the tab gives the pointer
+  back and the page receives `pointerlockchange`. Ported from
+  Nordstjernen.
 * A WebGL canvas drawn from a timer or an event handler, not only
   from `requestAnimationFrame`, reaches the screen as soon as it is
   drawn. The page's repaint request had no receiver in the browser

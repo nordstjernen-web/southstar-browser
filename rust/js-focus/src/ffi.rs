@@ -356,6 +356,15 @@ pub fn keyboard_activates(el: Node<'_>, key: &[u8]) -> bool {
     element(el).is_some_and(|el| crate::click::keyboard_activates(el, key))
 }
 
+pub fn pointer_lock_element(js: Page) -> Option<Node<'static>> {
+    let js = Js::of_page(js);
+    crate::peek(js, |page| page.pointer_lock)?.get()
+}
+
+pub fn release_pointer_lock(js: Page) {
+    crate::fullscreen::release_pointer_lock(Js::of_page(js));
+}
+
 pub fn note_pointer_input(js: Page, pointer: bool) {
     crate::with(Js::of_page(js), |page| page.pointer_input = pointer);
 }

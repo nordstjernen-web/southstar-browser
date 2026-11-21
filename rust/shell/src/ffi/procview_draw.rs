@@ -721,6 +721,9 @@ fn on_area_unrealize(v: *mut NsProcView) {
 }
 
 fn on_area_focus_notify(v: *mut NsProcView) {
+    if !area(v).is_some_and(|area| area.has_focus()) {
+        super::procview_lock::user_release(v);
+    }
     view(v).last_anim_frame_us = 0;
     request_render(v);
 }

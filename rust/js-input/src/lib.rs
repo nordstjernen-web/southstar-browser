@@ -54,6 +54,7 @@ pub struct Pointer {
 #[derive(Default)]
 struct Page {
     last_mouse: [Option<(f64, f64)>; 2],
+    locked_movement: [Option<(i32, i32)>; 2],
 }
 
 thread_local! {
@@ -68,8 +69,18 @@ pub(crate) fn movement(js: Js, slot: usize, client: (f64, f64)) -> (i32, i32) {
             ((client.0 - x) as i32, (client.1 - y) as i32)
         });
         page.last_mouse[slot] = Some(client);
-        delta
+        page.locked_movement[slot].take().unwrap_or(delta)
     })
+}
+
+/// Sets the movementX/Y the next mousemove and pointermove report, for a
+/// pointer-locked page whose pointer stays put while the mouse moves.
+pub fn set_locked_movement(js: southstar_js_runtime::api::Page, dx: i32, dy: i32) {
+    PAGES.with(|pages| {
+        let mut pages = pages.borrow_mut();
+        let page = pages.entry(Js::of_page(js)).or_default();
+        page.locked_movement = [Some((dx, dy)); 2];
+    });
 }
 
 pub(crate) fn teardown(js: Js) {

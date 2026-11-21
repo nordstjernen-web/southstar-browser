@@ -28,7 +28,7 @@ impl Js {
         Js(js)
     }
 
-    fn of_page(page: Page) -> Js {
+    pub(crate) fn of_page(page: Page) -> Js {
         Js(Some(page))
     }
 

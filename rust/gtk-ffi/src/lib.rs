@@ -498,6 +498,7 @@ unsafe extern "C" {
     pub fn gtk_widget_get_native(widget: *mut GtkWidget) -> *mut GtkNative;
     pub fn gtk_widget_get_scale_factor(widget: *mut GtkWidget) -> c_int;
     pub fn gtk_native_get_surface(native: *mut GtkNative) -> *mut GdkSurface;
+    pub fn gtk_native_get_surface_transform(native: *mut GtkNative, x: *mut f64, y: *mut f64);
     pub fn gtk_native_get_renderer(native: *mut GtkNative) -> *mut GskRenderer;
     pub fn gtk_widget_paintable_new(widget: *mut GtkWidget) -> *mut GdkPaintable;
     pub fn gtk_snapshot_new() -> *mut GtkSnapshot;

@@ -47,6 +47,7 @@ const REQ_VIDEO_EVENT: c_int = 20;
 const REQ_TICK: c_int = 21;
 const REQ_PRINT: c_int = 22;
 pub(super) const REQ_QUIT: c_int = 23;
+pub(super) const REQ_POINTER_UNLOCK: c_int = 24;
 
 pub(super) const RES_PAGE: c_int = 0;
 pub(super) const RES_FRAME: c_int = 1;
@@ -273,6 +274,7 @@ fn render_into(p: &mut Renderer, r: &Req, out: &mut Res) -> bool {
     };
     out.ok = 1;
     out.animating = glib::boolean(frame.animating);
+    out.pointer_lock = glib::boolean(frame.pointer_lock);
     out.caret_blinking = glib::boolean(frame.caret_blinking);
     out.wheel_snapped = glib::boolean(frame.wheel_snapped);
     out.pw = frame.page_w;
@@ -317,6 +319,7 @@ fn do_tick(v: *mut NsProcView, r: &Req) {
         out.ok = glib::boolean(tick.ok);
         out.kind = c_int::from(tick.changed);
         out.animating = glib::boolean(tick.animating);
+        out.pointer_lock = glib::boolean(tick.pointer_lock);
         out.pw = tick.page_w;
         out.ph = tick.page_h;
         out.nav = text(tick.nav);
@@ -521,14 +524,20 @@ fn handle(v: *mut NsProcView, req: *mut Req) {
         REQ_SELECT => do_select(v, r),
         REQ_HOVER => {
             let res = new_res(v, RES_HOVER, r.seq);
-            if let Some((changed, href, cursor)) = with_renderer(v, |p| p.hover(r.x, r.y)).flatten()
+            let locked = (r.kind == 1).then_some((r.dx, r.dy));
+            if let Some((changed, href, cursor, pointer_lock)) =
+                with_renderer(v, |p| p.pointer_move(r.x, r.y, locked)).flatten()
             {
                 let out = reply(res);
                 out.ok = glib::boolean(changed);
                 out.href = text(href);
                 out.cursor = text(cursor);
+                out.pointer_lock = glib::boolean(pointer_lock);
             }
             post(res);
+        }
+        REQ_POINTER_UNLOCK => {
+            with_renderer(v, Renderer::pointer_unlock);
         }
         REQ_SCROLLBAR => {
             let res = new_res(v, RES_SCROLLBAR, r.seq);

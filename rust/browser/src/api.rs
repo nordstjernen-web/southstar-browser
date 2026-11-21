@@ -342,6 +342,22 @@ impl Page {
         input::hover(self.browser(), x, y) > 0
     }
 
+    pub fn locked_move(&self, x: c_int, y: c_int, dx: c_int, dy: c_int) -> bool {
+        input::locked_move(self.browser(), x, y, dx, dy) > 0
+    }
+
+    pub fn pointer_locked(&self) -> bool {
+        self.browser()
+            .js()
+            .is_some_and(|js| js.pointer_lock_element().is_some())
+    }
+
+    pub fn release_pointer_lock(&self) {
+        if let Some(js) = self.browser().js() {
+            js.release_pointer_lock();
+        }
+    }
+
     pub fn scroll_at(&self, x: c_int, y: c_int, dx: c_int, dy: c_int) -> (bool, bool) {
         let (consumed, snapped) = input::scroll_at(self.browser(), x, y, dx, dy);
         (consumed != 0, consumed != 0 && snapped)

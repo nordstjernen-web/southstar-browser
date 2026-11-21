@@ -14,6 +14,7 @@ use southstar_gtk_ffi::GdkModifierType;
 
 use super::procview_chrome::{ns_pv_console_set_open, request_find, search_open, view_save};
 use super::procview_draw::{scroll_target_x, scroll_target_y};
+use super::procview_lock as lock;
 use super::procview_media::ns_pv_media_forget_rect;
 use super::procview_result::{
     ns_proc_view_zoom_in, ns_proc_view_zoom_out, ns_proc_view_zoom_reset,
@@ -90,6 +91,11 @@ fn dup(bytes: &[u8]) -> *mut c_char {
 }
 
 fn page_point(v: *mut NsProcView, x: f64, y: f64) -> (c_int, c_int) {
+    let (x, y) = if lock::active(v) {
+        lock::anchor(v)
+    } else {
+        (x, y)
+    };
     let s = cur_scale(v);
     let state = view(v);
     (
@@ -203,10 +209,16 @@ pub(super) fn start_hover(v: *mut NsProcView, x: c_int, y: c_int) {
     state.hover_inflight = 1;
     state.hover_seq += 1;
     let seq = state.hover_seq;
+    let movement = lock::active(v).then(|| lock::take_movement(v));
     send_req(v, REQ_HOVER, |r| {
         r.seq = seq;
         r.x = x;
         r.y = y;
+        if let Some((dx, dy)) = movement {
+            r.kind = 1;
+            r.dx = dx;
+            r.dy = dy;
+        }
     });
 }
 
@@ -429,6 +441,10 @@ fn on_pressed(v: *mut NsProcView, gesture: &GestureClick, n_press: c_int, x: f64
         area.grab_focus();
     }
     let (px, py) = page_point(v, x, y);
+    if lock::active(v) {
+        start_click(v, px, py, modifier_bits(mods));
+        return;
+    }
     if button == gtk::sys::BUTTON_MIDDLE || mods & gtk::sys::CONTROL_MASK != 0 {
         request_link(v, px, py, ACT_NEWTAB);
         return;
@@ -475,6 +491,13 @@ fn on_secondary_pressed(v: *mut NsProcView, gesture: &GestureClick, x: f64, y: f
 }
 
 fn on_motion(v: *mut NsProcView, x: f64, y: f64) {
+    if lock::motion(v, x, y) {
+        if opened(v) {
+            let (px, py) = page_point(v, x, y);
+            request_hover(v, px, py);
+        }
+        return;
+    }
     let state = view(v);
     if (x - state.pointer_x).abs() < 0.01 && (y - state.pointer_y).abs() < 0.01 {
         return;
@@ -488,6 +511,9 @@ fn on_motion(v: *mut NsProcView, x: f64, y: f64) {
 }
 
 fn on_drag_begin(v: *mut NsProcView, sx: f64, sy: f64) {
+    if lock::active(v) {
+        return;
+    }
     let state = view(v);
     state.drag_start_x = sx;
     state.drag_start_y = sy;
@@ -503,7 +529,7 @@ fn on_drag_begin(v: *mut NsProcView, sx: f64, sy: f64) {
 }
 
 fn on_drag_update(v: *mut NsProcView, ox: f64, oy: f64) {
-    if !opened(v) {
+    if !opened(v) || lock::active(v) {
         return;
     }
     let state = view(v);
@@ -553,6 +579,9 @@ fn is_cntrl(c: u32) -> bool {
 pub(super) fn on_key(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType) -> bool {
     if !opened(v) {
         return false;
+    }
+    if keyval == input::KEY_ESCAPE {
+        lock::user_release(v);
     }
     let control = gtk::sys::CONTROL_MASK;
     let shift = gtk::sys::SHIFT_MASK;

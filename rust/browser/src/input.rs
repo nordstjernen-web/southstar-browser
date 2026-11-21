@@ -190,6 +190,22 @@ pub fn hover(b: &NsBrowser, x: c_int, y: c_int) -> c_int {
     0
 }
 
+pub fn locked_move(b: &NsBrowser, x: c_int, y: c_int, dx: c_int, dy: c_int) -> c_int {
+    let Some(js) = b.js() else {
+        return -1;
+    };
+    let Some(target) = js.pointer_lock_element() else {
+        return hover(b, x, y);
+    };
+    js.set_locked_movement(dx, dy);
+    hover_dispatch(b, Some(target), x, y, (c"pointermove", c"mousemove"), None);
+    if js.consume_mutated() {
+        relayout_now(b);
+        return 1;
+    }
+    0
+}
+
 fn clamp_scroll(v: f64, max: f64) -> f64 {
     let v = if v < 0.0 { 0.0 } else { v };
     if v > max { max } else { v }

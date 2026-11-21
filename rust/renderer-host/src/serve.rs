@@ -356,6 +356,10 @@ impl<F: Framebuffer> Session<F> {
         changed
     }
 
+    fn pointer_locked(&self) -> bool {
+        self.cur.as_ref().is_some_and(Page::pointer_locked)
+    }
+
     fn animating(&mut self) -> bool {
         self.cur.as_ref().is_some_and(Page::animating)
             || self.tick_deferred
@@ -545,6 +549,9 @@ impl<F: Framebuffer> Session<F> {
         }
         if rv.wheel_snapped != 0 {
             animating |= 4;
+        }
+        if cur.pointer_locked() {
+            animating |= 8;
         }
         let clipboard = c_int::from(cur.has_pending_clipboard());
         let mut headers = format!(
@@ -762,13 +769,14 @@ impl<F: Framebuffer> Session<F> {
         let url_pushed = c_int::from(cur.take_soft_nav_pushed());
         let (page_w, page_h) = cur.page_size().unwrap_or_default();
         let animating = c_int::from(self.animating());
+        let pointer_lock = c_int::from(self.pointer_locked());
         json_reply(
             self.ctrl_w,
             &format!(
                 "{{\"ok\":1,\"changed\":{},\"animating\":{animating},\"page_width\":{page_w},\
                  \"page_height\":{page_h},\"nav\":\"{}\",\"webgl\":\"{}\",\"camera\":\"{}\",\
                  \"download\":\"{}\",\"audio\":\"{}\",\"window_action\":\"{}\",\"title\":\"{}\",\
-                 \"url\":\"{}\",\"url_pushed\":{url_pushed}}}",
+                 \"url\":\"{}\",\"url_pushed\":{url_pushed},\"pointer_lock\":{pointer_lock}}}",
                 c_int::from(changed != 0),
                 escaped(nav.as_deref()),
                 escaped(webgl.as_deref()),
@@ -1059,7 +1067,15 @@ impl<F: Framebuffer> Session<F> {
             }
             b"/hover" => {
                 let (x, y) = xy(body);
-                let changed = self.cur.as_ref().is_some_and(|cur| cur.hover(x, y));
+                let locked = long(body, "locked") != 0;
+                let (mx, my) = (long(body, "mx") as c_int, long(body, "my") as c_int);
+                let changed = self.cur.as_ref().is_some_and(|cur| {
+                    if locked {
+                        cur.locked_move(x, y, mx, my)
+                    } else {
+                        cur.hover(x, y)
+                    }
+                });
                 if changed {
                     self.frame_valid = false;
                 }
@@ -1068,12 +1084,19 @@ impl<F: Framebuffer> Session<F> {
                 json_reply(
                     fd,
                     &format!(
-                        "{{\"changed\":{},\"href\":\"{}\",\"cursor\":\"{}\"}}",
+                        "{{\"changed\":{},\"href\":\"{}\",\"cursor\":\"{}\",\"pointer_lock\":{}}}",
                         c_int::from(changed),
                         escaped(href.as_deref()),
-                        escaped(cursor.as_deref())
+                        escaped(cursor.as_deref()),
+                        c_int::from(self.pointer_locked())
                     ),
                 );
+            }
+            b"/pointer-unlock" => {
+                if let Some(cur) = self.cur.as_ref() {
+                    cur.release_pointer_lock();
+                }
+                json_reply(fd, "{\"ok\":1}");
             }
             b"/scroll" => {
                 let (x, y) = xy(body);

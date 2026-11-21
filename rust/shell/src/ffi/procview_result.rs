@@ -528,6 +528,7 @@ fn on_tick(v: *mut NsProcView, res: &Res) {
         }
         view(v).page_animating = res.animating;
         set_anim(v);
+        super::procview_lock::sync(v, res.pointer_lock != 0);
         if adopt_page_size(v, res) {
             configure_adjustments(v);
         }
@@ -573,6 +574,7 @@ fn on_frame(v: *mut NsProcView, res: &mut Res) {
         state.page_animating = res.animating;
         state.caret_blinking = res.caret_blinking;
         set_anim(v);
+        super::procview_lock::sync(v, res.pointer_lock != 0);
         if adopt_page_size(v, res)
             && let Some(area) = area(v)
         {
@@ -696,7 +698,10 @@ fn on_hover(v: *mut NsProcView, res: &Res) {
         return;
     }
     view(v).hover_inflight = 0;
-    show_link_status(v, filled(res.href), text(res.cursor));
+    super::procview_lock::sync(v, res.pointer_lock != 0);
+    if !super::procview_lock::active(v) {
+        show_link_status(v, filled(res.href), text(res.cursor));
+    }
     if res.ok != 0 {
         request_render(v);
     }
