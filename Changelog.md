@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* A `MessagePort` that leads to a worker transfers ports and other
+  transferables in its `postMessage`. Comlink-based libraries such as
+  libarchive.js hand a callback port to their worker that way, and the
+  call failed with a DataCloneError. Worker messages may now be up to
+  1 GiB instead of 16 MiB, so an 18 MB file extracted in a worker
+  reaches the page. Together these let Qwasm (Quake in WebAssembly)
+  unpack its shareware data and run.
 * Text inputs clip their contents to the field, so a long value no
   longer paints past the box's edge.
 * Headless `--actions` continue on the page a navigation lands on: an

@@ -15,7 +15,7 @@ use crate::ffi::{self, Ctx, Js, MainContext, MainLoop};
 use crate::{JsResult, PLAIN, arg, get, get_index, length, ports, push, set, set_str, truthy};
 
 const SCRIPT_BYTES_MAX: usize = 32 * 1024 * 1024;
-const MESSAGE_BYTES_MAX: usize = 16 * 1024 * 1024;
+const MESSAGE_BYTES_MAX: usize = 1024 * 1024 * 1024;
 const THREAD_STACK: usize = 8 * 1024 * 1024;
 const BRIDGE_REGISTRY: &str = "__ns_port_bridge";
 
@@ -468,13 +468,13 @@ fn transfer_ports(scope: &mut Scope<'_>, args: &[Value]) -> Value {
     ports
 }
 
-pub(crate) fn bridge_deliver(scope: &mut Scope<'_>, id: u64, data: &Value) {
+pub(crate) fn bridge_deliver(scope: &mut Scope<'_>, id: u64, data: &Value, transferred: &Value) {
     let port = bridge_lookup(scope, id);
     if !port.is_object() || truthy(scope, &port, "_closed") {
         return;
     }
     if truthy(scope, &port, "_started") {
-        ports::deliver(scope, &port, data, None);
+        ports::deliver(scope, &port, data, Some(transferred));
         return;
     }
     let mut queue = get(scope, &port, "_queue");
@@ -482,7 +482,8 @@ pub(crate) fn bridge_deliver(scope: &mut Scope<'_>, id: u64, data: &Value) {
         queue = scope.new_array();
         set(scope, &port, "_queue", queue.clone());
     }
-    push(scope, &queue, data.clone());
+    let message = ports::port_message(scope, data, transferred.clone());
+    push(scope, &queue, message);
 }
 
 fn bridge_receive(scope: &mut Scope<'_>, id: u64, worker: &Value) -> Value {
@@ -644,7 +645,7 @@ fn deliver_owner(message: Message) {
             Body::Error(report) => Some(report),
             _ => None,
         };
-        let ports = if report.is_some() || message.port_id != 0 {
+        let ports = if report.is_some() {
             scope.new_array()
         } else {
             message_ports(scope, &message, &owner)
@@ -655,7 +656,7 @@ fn deliver_owner(message: Message) {
             decode(scope, &message, &ports)
         };
         if message.port_id != 0 {
-            bridge_deliver(scope, message.port_id, &data);
+            bridge_deliver(scope, message.port_id, &data, &ports);
             ffi::drain_mutations(js);
             drop(budget);
             return;
@@ -729,11 +730,7 @@ fn deliver_worker(message: Message) {
     }
     ffi::with_js(js, |scope| {
         let budget = ffi::Budget::enter(scope);
-        let ports = if message.port_id != 0 {
-            scope.new_array()
-        } else {
-            message_ports(scope, &message, &Value::undefined())
-        };
+        let ports = message_ports(scope, &message, &Value::undefined());
         let connect = matches!(message.body, Body::Connect);
         let (kind, data) = if connect {
             ("connect", scope.string(""))
@@ -741,7 +738,7 @@ fn deliver_worker(message: Message) {
             decode(scope, &message, &ports)
         };
         if message.port_id != 0 {
-            bridge_deliver(scope, message.port_id, &data);
+            bridge_deliver(scope, message.port_id, &data, &ports);
             ffi::drain_microtasks(js);
             drop(budget);
             return;
@@ -803,22 +800,38 @@ pub(crate) fn connect(
     send(message, false);
 }
 
-pub(crate) fn bridge_send(scope: &mut Scope<'_>, port: &Value, id: u64, data: &Value) -> JsResult {
-    let (host, to_owner) = match ffi::worker_host_of(ffi::js_of(scope)) {
-        Some(host) => (Some(host), true),
+pub(crate) fn bridge_send(
+    scope: &mut Scope<'_>,
+    port: &Value,
+    id: u64,
+    args: &[Value],
+) -> JsResult {
+    let (host, to_owner, worker) = match ffi::worker_host_of(ffi::js_of(scope)) {
+        Some(host) => (Some(host), true, Value::undefined()),
         None => {
             let worker = get(scope, port, "_bridge_worker");
             let host = worker.with_host(|w: &WorkerRef| w.0.clone()).flatten();
-            (host, false)
+            (host, false, worker)
         }
     };
     let Some(host) = host.filter(|h| !h.closing()) else {
         return Ok(Value::undefined());
     };
-    let mut message = message_new(scope, &host, data, &Value::undefined())?;
-    message.port_id = id;
-    send(message, to_owner);
-    Ok(Value::undefined())
+    if transfer_list(scope, args, false).is_some_and(|list| {
+        list.is_array()
+            && (0..length(scope, &list)).any(|i| get_index(scope, &list, i).same_object(port))
+    }) {
+        return Err(ports::transfer_error(scope));
+    }
+    post(
+        scope,
+        &host,
+        args,
+        &worker,
+        to_owner,
+        id,
+        c"MessagePort.postMessage: a value in the transfer list is not transferable",
+    )
 }
 
 fn post(
@@ -827,6 +840,7 @@ fn post(
     args: &[Value],
     bridge_worker: &Value,
     to_owner: bool,
+    port_id: u64,
     refusal: &core::ffi::CStr,
 ) -> JsResult {
     if walk_transfers(scope, args, None, bridge_worker) {
@@ -834,6 +848,7 @@ fn post(
     }
     let ports = transfer_ports(scope, args);
     let mut message = message_new(scope, host, &args[0], &ports)?;
+    message.port_id = port_id;
     walk_transfers(scope, args, Some(&mut message), bridge_worker);
     send(message, to_owner);
     Ok(Value::undefined())
@@ -850,6 +865,7 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
         args,
         this,
         false,
+        0,
         c"Worker.postMessage: a value in the transfer list is not transferable",
     )
 }
@@ -877,6 +893,7 @@ pub(crate) fn global_post_message(
         args,
         &Value::undefined(),
         true,
+        0,
         c"postMessage: a value in the transfer list is not transferable",
     )
 }

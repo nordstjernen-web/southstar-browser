@@ -24,7 +24,7 @@ fn brand(scope: &mut Scope<'_>, this: &Value) -> Result<(), Value> {
     }
 }
 
-fn port_message(scope: &mut Scope<'_>, data: &Value, ports: Value) -> Value {
+pub(crate) fn port_message(scope: &mut Scope<'_>, data: &Value, ports: Value) -> Value {
     let message = scope.new_object();
     set(scope, &message, "_portMessage", Value::boolean(true));
     set(scope, &message, "data", data.clone());
@@ -188,7 +188,7 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     }
     let bridge = bridge_id(scope, this);
     if bridge != 0 {
-        return crate::worker::bridge_send(scope, this, bridge, data);
+        return crate::worker::bridge_send(scope, this, bridge, args);
     }
     let options = arg(args, 1);
     let transfer = if options.is_array() {
