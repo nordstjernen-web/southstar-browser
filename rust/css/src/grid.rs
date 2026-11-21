@@ -519,6 +519,37 @@ pub(crate) fn parse_tracks(text: &[u8]) -> Option<Tracks> {
     Some(tk)
 }
 
+fn is_area_name_byte(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'_' || c == b'-' || c >= 0x80
+}
+
+fn area_row_cells(row: &[u8]) -> Option<Vec<&[u8]>> {
+    let mut cells = Vec::new();
+    let mut p = 0;
+    while p < row.len() {
+        let start = p;
+        if is_ws(row[p]) {
+            p += 1;
+            continue;
+        }
+        if row[p] == b'.' {
+            while p < row.len() && row[p] == b'.' {
+                p += 1;
+            }
+            cells.push(&b"."[..]);
+            continue;
+        }
+        while p < row.len() && is_area_name_byte(row[p]) {
+            p += 1;
+        }
+        if p == start {
+            return None;
+        }
+        cells.push(&row[start..p]);
+    }
+    Some(cells)
+}
+
 pub(crate) fn parse_areas(text: &[u8]) -> Option<Areas> {
     let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];
     if text.is_empty() {
@@ -541,9 +572,8 @@ pub(crate) fn parse_areas(text: &[u8]) -> Option<Areas> {
             return None;
         }
         let row = &row[..row.iter().position(|&c| c == 0).unwrap_or(row.len())];
-        let cells: Vec<Vec<u8>> = row
-            .split(|&c| matches!(c, b' ' | b'\t' | b'\r' | b'\n'))
-            .filter(|cell| !cell.is_empty())
+        let cells: Vec<Vec<u8>> = area_row_cells(row)?
+            .into_iter()
             .take(TRACKS_MAX)
             .map(<[u8]>::to_vec)
             .collect();
@@ -562,6 +592,7 @@ pub(crate) fn parse_areas(text: &[u8]) -> Option<Areas> {
     let cols = cols as usize;
     let mut used = vec![vec![false; cols]; rows];
     let mut rects = Vec::new();
+    let mut named: Vec<&[u8]> = Vec::new();
     for r in 0..rows {
         for c in 0..cols {
             if used[r][c] {
@@ -580,6 +611,10 @@ pub(crate) fn parse_areas(text: &[u8]) -> Option<Areas> {
             while r1 + 1 < rows && (c..=c1).all(|k| &grid[r1 + 1][k] == name) {
                 r1 += 1;
             }
+            if named.contains(&name.as_slice()) {
+                return None;
+            }
+            named.push(name.as_slice());
             if rects.len() < AREAS_MAX {
                 rects.push(AreaRect {
                     name: name.clone(),
@@ -1169,18 +1204,15 @@ fn track_list_canonical(
     ok.then(|| track_tokens_canonical(toks))
 }
 
-fn area_string_canonical(tok: &[u8]) -> Vec<u8> {
+fn area_string_canonical(tok: &[u8]) -> Option<Vec<u8>> {
     let mut p = 0;
     let body = read_string(tok, &mut p, tok.len());
     let body = &body[..body.iter().position(|&c| c == 0).unwrap_or(body.len())];
-    let cells: Vec<&[u8]> = body
-        .split(|&c| matches!(c, b' ' | b'\t' | b'\r' | b'\n' | 0x0c))
-        .filter(|cell| !cell.is_empty())
-        .collect();
+    let cells = area_row_cells(body)?;
     let mut out = b"\"".to_vec();
     out.extend_from_slice(&cells.join(&b' '));
     out.push(b'"');
-    out
+    Some(out)
 }
 
 fn track_size_valid(tok: &[u8]) -> bool {
@@ -1219,7 +1251,9 @@ fn template_areas_form(
         if i >= n || t[i].kind != TokKind::String {
             return false;
         }
-        let row = area_string_canonical(t[i].text);
+        let Some(row) = area_string_canonical(t[i].text) else {
+            return false;
+        };
         i += 1;
         let mut size = None;
         if i < n && t[i].kind == TokKind::Other {

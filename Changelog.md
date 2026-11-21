@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* `grid-template-areas` rows are split into cells as the grid spec
+  tokenizes them, so a minified row such as `". .main. ."` is five
+  cells, not four with a `.main.` name. lichess.org's page grid is
+  written that way, and its whole lobby collapsed into a 10px column
+  some 30,000px tall. Areas that are not rectangles, or that use
+  characters outside names and `.`, now make the declaration invalid,
+  and `element.style` gives the rows in their canonical form. Ported
+  from Northstar.
+* A `url()` in a custom property keeps the author's quoting when it is
+  made absolute. Scripts read such values back as text: lichess.org cuts
+  `url(` and `)` off its piece variables, and the quotes we added landed
+  in the image address, so no chess piece loaded. Ported from Northstar.
 
 Southstar Browser 1.0.11:
 ======

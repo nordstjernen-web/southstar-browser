@@ -437,6 +437,11 @@ fn value_canonical(prop: &[u8], mut value: Vec<u8>) -> Vec<u8> {
     {
         return canon;
     }
+    if prop == b"grid-template-areas"
+        && let Some(areas) = grid::parse_areas(&value)
+    {
+        return values::areas_text(&areas);
+    }
     value = add_leading_zeros(&value);
     value = normalize_negative_zero(&value);
     value = serialize_urls(&value);

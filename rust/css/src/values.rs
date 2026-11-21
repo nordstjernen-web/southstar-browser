@@ -150,7 +150,7 @@ fn tracks_text(tracks: &Tracks, specified: Option<&[u8]>) -> Vec<u8> {
     out
 }
 
-fn areas_text(areas: &Areas) -> Vec<u8> {
+pub(crate) fn areas_text(areas: &Areas) -> Vec<u8> {
     let mut out = Vec::new();
     for r in 0..areas.rows.max(0) {
         if r > 0 {
