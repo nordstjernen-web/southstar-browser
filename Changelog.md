@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Text inputs clip their contents to the field, so a long value no
+  longer paints past the box's edge.
+* Headless `--actions` continue on the page a navigation lands on: an
+  action that navigates no longer drops the actions after it.
 * `grid-template-areas` rows are split into cells as the grid spec
   tokenizes them, so a minified row such as `". .main. ."` is five
   cells, not four with a `.main.` name. lichess.org's page grid is
