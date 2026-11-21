@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* A `MessagePort` that leads to a worker transfers ports and other
+  transferables in its `postMessage`. Comlink-based libraries such as
+  libarchive.js hand a callback port to their worker that way, and the
+  call failed with a DataCloneError. Worker messages may now be up to
+  1 GiB instead of 16 MiB, so an 18 MB file extracted in a worker
+  reaches the page. Together these let Qwasm (Quake in WebAssembly)
+  unpack its shareware data and run.
 * `grid-template-areas` rows are split into cells as the grid spec
   tokenizes them, so a minified row such as `". .main. ."` is five
   cells, not four with a `.main.` name. lichess.org's page grid is
