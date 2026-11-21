@@ -23,8 +23,9 @@ pub use crate::ffi::install_runtime_hooks;
 pub use crate::ffi::{
     activate_element, clear_focused_node, click_activation_target, focus_from_pointer, focused_doc,
     focused_node, has_activation_behavior, is_focusable, keyboard_activate, keyboard_activates,
-    note_pointer_input, reset_focus, sequential_focus_target, set_focus, set_focused_node,
-    synthetic_activation, tabindex, window_action_applied,
+    note_pointer_input, pointer_lock_element, release_pointer_lock, reset_focus,
+    sequential_focus_target, set_focus, set_focused_node, synthetic_activation, tabindex,
+    window_action_applied,
 };
 
 pub use ffi::nsr_document_has_focus;

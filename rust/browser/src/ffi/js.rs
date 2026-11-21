@@ -85,6 +85,18 @@ impl Js {
         api::set_selection(self.page(), text, has_range, r);
     }
 
+    pub fn pointer_lock_element(self) -> Option<Node<'static>> {
+        southstar_js_focus::pointer_lock_element(self.handle())
+    }
+
+    pub fn release_pointer_lock(self) {
+        southstar_js_focus::release_pointer_lock(self.handle());
+    }
+
+    pub fn set_locked_movement(self, dx: i32, dy: i32) {
+        southstar_js_input::set_locked_movement(self.handle(), dx, dy);
+    }
+
     pub fn request_repaint(self) {
         api::request_repaint(self.page());
     }

@@ -189,12 +189,15 @@ pub fn request_pointer_lock(scope: &mut Scope<'_>, this: &Value, _args: &[Value]
 }
 
 pub fn exit_pointer_lock(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
-    let js = ffi::js_of(scope);
+    release_pointer_lock(ffi::js_of(scope));
+    Ok(Value::undefined())
+}
+
+pub(crate) fn release_pointer_lock(js: Js) {
     if !js.is_null() && crate::peek(js, |page| page.pointer_lock).is_some() {
         crate::with(js, |page| page.pointer_lock = None);
         pointer_lock_changed(js);
     }
-    Ok(Value::undefined())
 }
 
 pub fn get_pointer_lock_element(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {

@@ -15,6 +15,7 @@ mod pagelayers;
 mod procview_chrome;
 mod procview_draw;
 mod procview_input;
+mod procview_lock;
 mod procview_media;
 mod procview_remote;
 mod procview_result;

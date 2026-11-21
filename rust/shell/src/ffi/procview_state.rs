@@ -122,6 +122,7 @@ pub struct Res {
     pub animating: GBoolean,
     pub caret_blinking: GBoolean,
     pub wheel_snapped: GBoolean,
+    pub pointer_lock: GBoolean,
     pub frame_unchanged: GBoolean,
     pub requested_scroll_y: c_int,
     pub requested_scroll_x: c_int,
@@ -291,6 +292,7 @@ pub struct NsProcView {
     pub last_anim_frame_us: i64,
     pub page_animating: GBoolean,
     pub caret_blinking: GBoolean,
+    pub plock: super::procview_lock::PointerLock,
 }
 
 impl NsProcView {

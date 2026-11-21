@@ -54,6 +54,7 @@ pub struct Frame<'a> {
     pub animating: bool,
     pub caret_blinking: bool,
     pub wheel_snapped: bool,
+    pub pointer_lock: bool,
     pub page_w: c_int,
     pub page_h: c_int,
     pub scroll_y: c_int,
@@ -87,6 +88,7 @@ pub struct Tick {
     pub title: Option<Vec<u8>>,
     pub url: Option<Vec<u8>>,
     pub url_pushed: bool,
+    pub pointer_lock: bool,
 }
 
 pub struct Wheel {
@@ -172,6 +174,7 @@ fn frame_from_head<'a>(head: &Head) -> Frame<'a> {
         animating: head.x_anim & 1 != 0,
         caret_blinking: head.x_anim & 2 != 0,
         wheel_snapped: head.x_anim & 4 != 0,
+        pointer_lock: head.x_anim & 8 != 0,
         page_w: head.x_page_w as c_int,
         page_h: head.x_page_h as c_int,
         scroll_y: head.x_scroll_y as c_int,
@@ -516,6 +519,7 @@ impl Renderer {
             title: text(&body, "title"),
             url: text(&body, "url"),
             url_pushed: long(&body, "url_pushed") != 0,
+            pointer_lock: long(&body, "pointer_lock") != 0,
         })
     }
 
@@ -579,12 +583,35 @@ impl Renderer {
     }
 
     pub fn hover(&mut self, x: c_int, y: c_int) -> Option<(bool, Text, Text)> {
-        let body = self.request("/hover", &format!("{{\"x\":{x},\"y\":{y}}}"))?;
+        self.pointer_move(x, y, None)
+            .map(|(changed, href, cursor, _)| (changed, href, cursor))
+    }
+
+    /// Moves the pointer to (x, y); `locked` carries the mouse movement of a
+    /// pointer-locked page. Also returns whether the page holds the lock.
+    pub fn pointer_move(
+        &mut self,
+        x: c_int,
+        y: c_int,
+        locked: Option<(c_int, c_int)>,
+    ) -> Option<(bool, Text, Text, bool)> {
+        let json = match locked {
+            Some((mx, my)) => {
+                format!("{{\"x\":{x},\"y\":{y},\"locked\":1,\"mx\":{mx},\"my\":{my}}}")
+            }
+            None => format!("{{\"x\":{x},\"y\":{y}}}"),
+        };
+        let body = self.request("/hover", &json)?;
         Some((
             long(&body, "changed") != 0,
             non_empty(text(&body, "href")),
             non_empty(text(&body, "cursor")),
+            long(&body, "pointer_lock") != 0,
         ))
+    }
+
+    pub fn pointer_unlock(&mut self) {
+        let _ = self.request("/pointer-unlock", "{}");
     }
 
     fn flag(&mut self, path: &str, json: &str, key: &str) -> bool {

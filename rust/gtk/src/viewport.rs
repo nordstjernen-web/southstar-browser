@@ -106,6 +106,23 @@ impl Widget {
         unsafe { from_borrowed(surface.cast()) }
     }
 
+    /// Maps a point in this widget to its native surface's coordinates.
+    pub fn surface_point(&self, x: f64, y: f64) -> Option<(f64, f64)> {
+        // SAFETY: self is a live widget.
+        let native = unsafe { sys::gtk_widget_get_native(self.as_ptr()) };
+        // SAFETY: native is null or the live GtkNative holding self, which is a widget.
+        let native_widget = unsafe { Widget::from_ptr(native.cast()) }?;
+        let point = sys::GraphenePoint {
+            x: x as f32,
+            y: y as f32,
+        };
+        let at = self.compute_point(&native_widget, point)?;
+        let (mut sx, mut sy) = (0.0, 0.0);
+        // SAFETY: native is the live GtkNative and both outputs are valid for the call.
+        unsafe { sys::gtk_native_get_surface_transform(native, &mut sx, &mut sy) };
+        Some((f64::from(at.x) + sx, f64::from(at.y) + sy))
+    }
+
     pub fn connect_realize(&self, f: impl Fn() + 'static) -> SignalHandlerId {
         signal::connect_plain(self.object(), c"realize", f)
     }
