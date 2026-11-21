@@ -531,6 +531,19 @@ fn url_resolve(base: &CStr, rel: &[u8]) -> Option<Vec<u8>> {
     southstar_url::bytes::resolve(Some(base.to_bytes()), rel)
 }
 
+fn url_quote_for(url: &[u8], authored: Option<u8>) -> Option<u8> {
+    match authored {
+        None if url
+            .iter()
+            .any(|&c| matches!(c, b'"' | b'\'' | b'(' | b')' | b'\\') || is_gspace(c)) =>
+        {
+            Some(b'"')
+        }
+        Some(b'\'') if url.contains(&b'\'') => Some(b'"'),
+        quote => quote,
+    }
+}
+
 fn raw_text_resolve_urls(text: &[u8], base: &CStr) -> Option<Vec<u8>> {
     let find = |hay: &[u8], needle: &[u8]| hay.windows(needle.len()).position(|w| w == needle);
     find(text, b"url(")?;
@@ -559,8 +572,10 @@ fn raw_text_resolve_urls(text: &[u8], base: &CStr) -> Option<Vec<u8>> {
         while e > s && is_gspace(text[e - 1]) {
             e -= 1;
         }
+        let mut quote = None;
         if e > s && (text[s] == b'"' || text[s] == b'\'') {
             let q = text[s];
+            quote = Some(q);
             s += 1;
             if e > s && text[e - 1] == q {
                 e -= 1;
@@ -574,9 +589,12 @@ fn raw_text_resolve_urls(text: &[u8], base: &CStr) -> Option<Vec<u8>> {
         };
         match abs.filter(|abs| abs.as_slice() != rel) {
             Some(abs) => {
-                out.extend_from_slice(b"url(\"");
+                let quote = url_quote_for(&abs, quote);
+                out.extend_from_slice(b"url(");
+                out.extend(quote);
                 out.extend_from_slice(&abs);
-                out.extend_from_slice(b"\")");
+                out.extend(quote);
+                out.push(b')');
                 changed = true;
             }
             None => out.extend_from_slice(&text[hit..close + 1]),
