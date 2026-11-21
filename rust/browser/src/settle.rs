@@ -245,6 +245,9 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
     if b.pending_scroll.get() {
         changed = true;
     }
+    if b.repaint_requested.take() {
+        changed = true;
+    }
     if !changed && b.videos().is_some_and(ffi::Videos::waiting_growth) {
         changed = true;
     }
@@ -257,6 +260,7 @@ pub fn busy(b: &NsBrowser) -> bool {
 
 pub fn animating(b: &NsBrowser) -> bool {
     b.dirty.get()
+        || b.repaint_requested.get()
         || b.hover_restyle_pending.get()
         || b.refresh_due_us.get() != 0
         || b.refresh_url.is_set()
