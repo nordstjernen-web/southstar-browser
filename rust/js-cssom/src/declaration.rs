@@ -236,6 +236,27 @@ pub(crate) fn get_computed_style(
     Ok(cs)
 }
 
+pub(crate) fn computed_value(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    let [element, name, ..] = args else {
+        return Ok(scope.string(""));
+    };
+    if !ffi::element_is_rendered(scope, element) {
+        return Ok(scope.string(""));
+    }
+    let Some(node) = ffi::unwrap_element(element) else {
+        return Ok(scope.string(""));
+    };
+    let Ok(name) = scope.to_string(name) else {
+        return Ok(scope.string(""));
+    };
+    let value = computed::lookup_unresolved(ffi::js_of(scope), node, &name);
+    Ok(scope.string(value.as_deref().unwrap_or("")))
+}
+
 fn computed_get_property_value(
     scope: &mut Scope<'_>,
     this: &Value,

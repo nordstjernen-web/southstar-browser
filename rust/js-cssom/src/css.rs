@@ -52,6 +52,13 @@ pub(crate) fn install_window(scope: &mut Scope<'_>, global: &Value) -> Result<()
         declaration::get_computed_style,
         1,
     )?;
+    bind(
+        scope,
+        global,
+        "__ndComputedValue",
+        declaration::computed_value,
+        2,
+    )?;
     hidden(scope, global, "__ns_css_supported", supported_property, 1)?;
     hidden(scope, global, "__ns_easing_canonical", easing_canonical, 1)?;
     hidden(scope, global, "__ns_linked_css", linked_css_text, 1)?;

@@ -486,20 +486,33 @@ fn is_opacity(prop: Prop) -> bool {
     )
 }
 
-fn is_scroll_margin(prop: Prop) -> bool {
+fn accepts_bare_number(prop: Prop) -> bool {
+    !bare_number_is_length(prop) || matches!(prop, Prop::StrokeWidth | Prop::StrokeDashoffset)
+}
+
+fn rejects_percent(prop: Prop) -> bool {
     matches!(
         prop,
         Prop::ScrollMarginTop
             | Prop::ScrollMarginRight
             | Prop::ScrollMarginBottom
             | Prop::ScrollMarginLeft
+            | Prop::BorderTopWidth
+            | Prop::BorderRightWidth
+            | Prop::BorderBottomWidth
+            | Prop::BorderLeftWidth
+            | Prop::OutlineWidth
+            | Prop::OutlineOffset
+            | Prop::ColumnRuleWidth
+            | Prop::RowRuleWidth
+            | Prop::ColumnWidth
     )
 }
 
 fn numeric_valid(prop: Prop, body: &Body) -> bool {
     match body {
-        Body::Length(_, PERCENT) if is_scroll_margin(prop) => false,
-        Body::Calc(c) if is_scroll_margin(prop) && c.pct != 0.0 => false,
+        Body::Length(_, PERCENT) if rejects_percent(prop) => false,
+        Body::Calc(c) if rejects_percent(prop) && c.pct != 0.0 => false,
         Body::Length(num, unit) => {
             let (num, unit) = (*num, *unit);
             if is_opacity(prop) {
@@ -527,6 +540,23 @@ fn numeric_valid(prop: Prop, body: &Body) -> bool {
         }
         _ => false,
     }
+}
+
+fn text_is_image_function(t: &[u8]) -> bool {
+    const MATH: [&[u8]; 22] = [
+        b"calc", b"min", b"max", b"clamp", b"round", b"mod", b"rem", b"sin", b"cos", b"tan",
+        b"asin", b"acos", b"atan", b"atan2", b"pow", b"sqrt", b"hypot", b"log", b"exp", b"abs",
+        b"sign", b"env",
+    ];
+    let name_len = t
+        .iter()
+        .take_while(|&&c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        .count();
+    if name_len == 0 || t.get(name_len) != Some(&b'(') || t[0].is_ascii_digit() {
+        return false;
+    }
+    let name = &t[..name_len];
+    !MATH.iter().any(|m| name.eq_ignore_ascii_case(m)) && t.last() == Some(&b')')
 }
 
 pub(crate) fn text_is_ident(t: &[u8]) -> bool {
@@ -955,6 +985,12 @@ fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
     let mut v = if keyword {
         Some(Value::keyword(lower(t)))
     } else if let Some(parsed) = calc_value(t) {
+        if t.first().is_some_and(u8::is_ascii_alphabetic)
+            && matches!(parsed, Parsed::Length(_, NUMBER))
+            && !accepts_bare_number(prop)
+        {
+            return None;
+        }
         let mut value = Value::from_parsed(parsed);
         if folds_relative_units(t) {
             value.specified =
@@ -1080,7 +1116,7 @@ fn image_prop(t: &[u8]) -> Option<Value> {
             None => iset_computed = Some(computed),
         }
     }
-    if v.is_none() && iset_computed.is_none() && text_is_ident(t) && !eq(t, b"none") {
+    if v.is_none() && iset_computed.is_none() && !eq(t, b"none") && !text_is_image_function(t) {
         return None;
     }
     Some(v.unwrap_or_else(|| Value::keyword(iset_computed.unwrap_or_else(|| lower(t)))))

@@ -289,7 +289,7 @@ pub fn eval_polyfills(js: Option<Page>) {
     record::eval_polyfills(js);
 }
 
-pub fn bundled_sources() -> [&'static str; 2] {
+pub fn bundled_sources() -> [&'static str; 3] {
     record::bundled_sources()
 }
 
