@@ -636,7 +636,33 @@ fn quad3_unproject(q: &Quad3, sx: f64, sy: f64) -> Option<(f64, f64, f64)> {
 
 pub type HitTest = for<'a> fn(BoxRef<'a>, f64, f64) -> Option<BoxRef<'a>>;
 
+thread_local! {
+    static PICKING: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
+}
+
+struct PickingRoot;
+
+impl PickingRoot {
+    fn enter(root: usize) -> Option<PickingRoot> {
+        PICKING.with(|p| {
+            let mut p = p.borrow_mut();
+            if p.contains(&root) {
+                return None;
+            }
+            p.push(root);
+            Some(PickingRoot)
+        })
+    }
+}
+
+impl Drop for PickingRoot {
+    fn drop(&mut self) {
+        PICKING.with(|p| p.borrow_mut().pop());
+    }
+}
+
 pub fn pick<'a>(root3d: BoxRef<'a>, x: f64, y: f64, hit_test: HitTest) -> Option<BoxRef<'a>> {
+    let _picking = PickingRoot::enter(root3d.as_ptr().addr())?;
     let existing = REGISTRY.with(|r| r.borrow().quads.get(&root3d.as_ptr()).cloned());
     let quads = match existing {
         Some(q) => q,
