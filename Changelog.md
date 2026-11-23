@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Security: clicking a box that is the root of a 3D-transformed subtree
+  with its own background or border no longer overflows the renderer's
+  stack. The 3D hit test picked the box's own quad, hit-tested the box,
+  and that re-entered the 3D pick for the same box without end; the
+  renderer crashed and the tab reloaded. On Google Maps this made the
+  Layers button reload the page instead of switching to satellite view.
+  Ported from Nordstjernen.
 * Security: private browsing no longer writes anything to disk. Each
   private-mode process made a `southstar-private-XXXXXX` directory in the
   temporary directory holding a copy of the HSTS list (hosts from the
