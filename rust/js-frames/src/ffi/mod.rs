@@ -360,7 +360,7 @@ fn realm_clone(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult
 }
 
 fn run_bundled(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
-    let names = ["<frame-polyfills>", "<frame-streaming>"];
+    let names = ["<frame-polyfills>", "<frame-streaming>", "<frame-typed-om>"];
     for (source, name) in api::bundled_sources().into_iter().zip(names) {
         drop(scope.eval_native_script(source, name));
     }

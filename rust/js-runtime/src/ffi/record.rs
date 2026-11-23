@@ -35,6 +35,7 @@ const MATHML_NS: &CStr = c"http://www.w3.org/1998/Math/MathML";
 
 static POLYFILLS: &str = concat!(include_str!("../../js/polyfills.js"), "\0");
 static STREAMING: &str = concat!(include_str!("../../js/streaming.js"), "\0");
+static TYPED_OM: &str = concat!(include_str!("../../js/typed-om.js"), "\0");
 
 const FRAME_WINDOW_CHAIN: &[u8] = b"(function(G){\
   var gp = Object.getPrototypeOf, sp = Object.setPrototypeOf;\
@@ -573,6 +574,7 @@ fn eval_bundled(js: Option<Page>, source: &str, origin: &CStr) {
 
 pub(crate) fn eval_worker_polyfills(js: Option<Page>) {
     eval_bundled(js, POLYFILLS, c"<worker-polyfills>");
+    eval_bundled(js, TYPED_OM, c"<worker-typed-om>");
 }
 
 pub(crate) fn free_page_strings(js: &Record) {
@@ -1307,10 +1309,11 @@ pub(crate) fn eval_polyfills(js: Option<Page>) {
     }
     eval_bundled(js, POLYFILLS, c"<polyfills>");
     eval_bundled(js, STREAMING, c"<streaming>");
+    eval_bundled(js, TYPED_OM, c"<typed-om>");
 }
 
-pub(crate) fn bundled_sources() -> [&'static str; 2] {
-    [POLYFILLS, STREAMING].map(|source| source.trim_suffix('\0'))
+pub(crate) fn bundled_sources() -> [&'static str; 3] {
+    [POLYFILLS, STREAMING, TYPED_OM].map(|source| source.trim_suffix('\0'))
 }
 
 pub(crate) fn snapshot_platform_globals(js: Option<Page>) {

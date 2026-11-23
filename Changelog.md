@@ -3,6 +3,21 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* CSS Typed OM: `CSSStyleValue` and its numeric, math, keyword, unparsed,
+  image, transform and color subclasses, the `CSS.px()`-style unit
+  factories, `element.attributeStyleMap`, `CSSStyleRule.styleMap` and
+  `element.computedStyleMap()`. The maps read and write through the
+  existing CSSOM; `computedStyleMap()` reports computed rather than
+  resolved values, without forcing a layout. Scripts and frameworks that
+  feature-detect Typed OM now take their native path. Ported from
+  Nordstjernen.
+* CSS validation is stricter where it was too lenient: a `calc()` that
+  resolves to a plain number is no longer a valid length (`width: calc(0)`),
+  border, outline and column-rule widths, `outline-offset` and
+  `column-width` reject percentages, and `background-image`,
+  `list-style-image` and `mask-image` reject values that are not images
+  (`0`, `3.14%`, `calc(2 + 3)`). `CSS.supports()` agrees, and Typed OM's
+  `styleMap.set()` throws for values of the wrong type.
 * Pointer lock works in the browser window. When a page calls
   `requestPointerLock()`, the tab hides the cursor, keeps it in the
   page (on Windows it is confined to the view and re-centred after

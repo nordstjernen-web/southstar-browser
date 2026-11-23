@@ -3,6 +3,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::cell::Cell;
+
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
@@ -1415,6 +1417,17 @@ fn stretch_percentage(value: String) -> String {
     percent.to_string()
 }
 
+thread_local! {
+    static UNRESOLVED: Cell<bool> = const { Cell::new(false) };
+}
+
+pub(crate) fn lookup_unresolved(js: Js, n: Node<'_>, name: &str) -> Option<String> {
+    let previous = UNRESOLVED.replace(true);
+    let value = lookup(js, n, name);
+    UNRESOLVED.set(previous);
+    value
+}
+
 pub(crate) fn lookup(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     if name == "font-stretch" || name == "font-width" {
         return lookup_value(js, n, "font-stretch").map(stretch_percentage);
@@ -1490,7 +1503,7 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         return value;
     }
 
-    let needs_layout = layout_dependent(name);
+    let needs_layout = !UNRESOLVED.get() && layout_dependent(name);
     if needs_layout {
         ffi::flush_layout(js);
     } else {
