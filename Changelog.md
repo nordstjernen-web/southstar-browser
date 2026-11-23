@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Security: private browsing no longer writes anything to disk. Each
+  private-mode process made a `southstar-private-XXXXXX` directory in the
+  temporary directory holding a copy of the HSTS list (hosts from the
+  normal profile) and the private session's cookie jars, and removed it
+  only on a clean exit, so killed renderers left one behind every time; on
+  Windows, a process without `TEMP`/`TMP` put them in the root of the
+  drive, where other users can read them. Private mode now reads the HSTS
+  list read-only and keeps the hosts it learns and its cookies in memory.
+  Ported from Nordstjernen.
 * CSS Typed OM: `CSSStyleValue` and its numeric, math, keyword, unparsed,
   image, transform and color subclasses, the `CSS.px()`-style unit
   factories, `element.attributeStyleMap`, `CSSStyleRule.styleMap` and

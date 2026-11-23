@@ -12,8 +12,6 @@ use std::path::{Path, PathBuf};
 use southstar_config::util;
 use southstar_netutil::file_uri;
 
-const TMP_NAME_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
 fn io_message(error: &std::io::Error) -> Vec<u8> {
     let text = error.to_string();
     let text = match text.rfind(" (os error ") {
@@ -190,40 +188,12 @@ impl CFile {
     }
 }
 
-pub fn tmp_dir() -> Vec<u8> {
-    southstar_glib::tmp_dir()
-}
-
 pub fn user_config_dir() -> Vec<u8> {
     southstar_glib::user_config_dir()
 }
 
 pub fn user_data_dir() -> Vec<u8> {
     southstar_glib::user_data_dir()
-}
-
-fn tmp_name(prefix: &[u8]) -> Vec<u8> {
-    let mut name = prefix.to_vec();
-    let mut bits = util::random_u32();
-    for _ in 0..6 {
-        name.push(TMP_NAME_CHARS[(bits % 62) as usize]);
-        bits /= 62;
-    }
-    name
-}
-
-pub fn make_tmp_dir(template: &CStr) -> Option<Vec<u8>> {
-    let prefix = template.to_bytes().strip_suffix(b"XXXXXX")?;
-    let tmp = tmp_dir();
-    for _ in 0..100 {
-        let path = build_filename(&tmp, &tmp_name(prefix));
-        match util::make_dir(&os_path(&path)?, 0o700) {
-            Ok(()) => return Some(path),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(_) => return None,
-        }
-    }
-    None
 }
 
 pub fn mkdir_with_parents(path: &[u8], mode: u32) {
@@ -236,10 +206,6 @@ pub fn chmod(path: &[u8], mode: u32) {
     if let Some(path) = os_path(path) {
         let _ = util::set_mode(&path, mode);
     }
-}
-
-pub fn random_u32() -> u32 {
-    util::random_u32()
 }
 
 pub use southstar_glib::now_seconds;
