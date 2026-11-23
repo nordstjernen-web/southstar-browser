@@ -1,4 +1,4 @@
-//! Southstar — the HSTS host list in curl's file format: recording Strict-Transport-Security headers and deciding, from a cache reread when the file changes, which http:// URLs go to https:// first until their entries expire.
+//! Southstar — the HSTS host list in curl's file format: recording Strict-Transport-Security headers and deciding, from a cache reread when the file changes, which http:// URLs go to https:// first until their entries expire; private mode reads the file but keeps what it learns in memory.
 //!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
@@ -13,6 +13,7 @@ use crate::{storage, url};
 struct Cache {
     hosts: Hosts,
     mtime_us: i64,
+    private_list: Option<Vec<u8>>,
 }
 
 static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
@@ -41,10 +42,14 @@ pub fn should_upgrade(host: &[u8]) -> bool {
     };
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
     let mtime = mtime_us(&path);
-    if cache.as_ref().is_none_or(|c| c.mtime_us != mtime) {
+    if cache
+        .as_ref()
+        .is_none_or(|c| c.private_list.is_none() && c.mtime_us != mtime)
+    {
         *cache = Some(Cache {
             hosts: load(&path),
             mtime_us: mtime,
+            private_list: None,
         });
     }
     let host = rules::normalize_host(host);
@@ -72,8 +77,19 @@ pub fn record(host: &[u8], value: &[u8]) {
         return;
     };
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    let existing = sys::read_file(&path).unwrap_or_default();
+    let existing = cache
+        .as_mut()
+        .and_then(|c| c.private_list.take())
+        .unwrap_or_else(|| sys::read_file(&path).unwrap_or_default());
     let out = rules::record(&existing, &host, &policy, max_age, sys::now_seconds());
+    if storage::is_private() {
+        *cache = Some(Cache {
+            hosts: rules::parse_list(&out),
+            mtime_us: 0,
+            private_list: Some(out),
+        });
+        return;
+    }
     sys::write_file(&path, &out);
     *cache = None;
 }

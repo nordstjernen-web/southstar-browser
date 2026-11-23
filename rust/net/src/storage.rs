@@ -1,4 +1,4 @@
-//! Southstar — where the network layer keeps its files: the per-user data and cookie folders, the throwaway private-mode folder, the HSTS and Alt-Svc files, and clearing cookies and site storage.
+//! Southstar — where the network layer keeps its files: the per-user data and cookie folders (private mode writes neither), the HSTS and Alt-Svc files, and clearing cookies and site storage.
 //!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
@@ -48,7 +48,6 @@ impl Slot {
 }
 
 pub static COOKIE_DIR: Slot = Slot::new();
-pub static PRIVATE_ROOT: Slot = Slot::new();
 pub static HSTS_PATH: Slot = Slot::new();
 
 pub fn is_private() -> bool {
@@ -63,21 +62,6 @@ fn app_data_dir() -> Vec<u8> {
     join(&sys::user_data_dir(), APP_DIR)
 }
 
-pub fn private_root() -> Option<Vec<u8>> {
-    PRIVATE_ROOT.get_or_init(|| {
-        let root = sys::make_tmp_dir(c"southstar-private-XXXXXX").unwrap_or_else(|| {
-            let root = join(
-                &sys::tmp_dir(),
-                format!("southstar-private-{}", sys::random_u32()).as_bytes(),
-            );
-            sys::mkdir_with_parents(&root, PRIVATE_MODE_DIR);
-            root
-        });
-        sys::chmod(&root, PRIVATE_MODE_DIR);
-        Some(root)
-    })
-}
-
 fn data_path(slot: &Slot, basename: &[u8]) -> Option<Vec<u8>> {
     slot.get_or_init(|| {
         let dir = app_data_dir();
@@ -87,43 +71,30 @@ fn data_path(slot: &Slot, basename: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn cookie_dir() -> Option<Vec<u8>> {
+    if is_private() {
+        return None;
+    }
     COOKIE_DIR.get_or_init(|| {
-        let dir = if is_private() {
-            let root = private_root().unwrap_or_else(sys::tmp_dir);
-            join(&root, b"cookies")
-        } else {
-            join(&join(&sys::user_config_dir(), APP_DIR), b"cookies")
-        };
+        let dir = join(&join(&sys::user_config_dir(), APP_DIR), b"cookies");
         sys::mkdir_with_parents(&dir, PRIVATE_MODE_DIR);
         Some(dir)
     })
 }
 
 pub fn hsts_path() -> Option<Vec<u8>> {
-    if let Some(path) = HSTS_PATH.get() {
-        return Some(path);
-    }
-    if !is_private() {
-        return data_path(&HSTS_PATH, b"hsts-curl.txt");
-    }
-    let root = private_root()?;
-    HSTS_PATH.get_or_init(|| {
-        let path = join(&root, b"hsts-curl.txt");
-        let real = join(&app_data_dir(), b"hsts-curl.txt");
-        if let Ok(contents) = sys::read_file(&real) {
-            sys::write_file(&path, &contents);
-        }
-        Some(path)
-    })
+    data_path(&HSTS_PATH, b"hsts-curl.txt")
 }
 
 pub fn cookie_jar_path(top_origin: Option<&[u8]>, js: bool) -> Option<Vec<u8>> {
-    let dir = cookie_dir()?;
     let key = top_origin.filter(|o| !o.is_empty()).unwrap_or(b"default");
     let digest = southstar_digest::sha256_hex(key);
     let short = &digest.as_bytes()[..digest.len().min(32)];
     let suffix: &[u8] = if js { b".js.txt" } else { b".txt" };
-    Some(join(&dir, &[short, suffix].concat()))
+    let name = [short, suffix].concat();
+    if is_private() {
+        return Some(name);
+    }
+    Some(join(&cookie_dir()?, &name))
 }
 
 pub fn lock_cookie_jars() -> Option<std::fs::File> {
@@ -131,6 +102,7 @@ pub fn lock_cookie_jars() -> Option<std::fs::File> {
 }
 
 pub fn clear_cookies() {
+    crate::cookies::forget_private_jars();
     if let Some(dir) = cookie_dir() {
         sys::empty_dir(&dir);
     }
@@ -145,7 +117,4 @@ pub fn clear_site_storage() {
 pub fn shutdown() {
     COOKIE_DIR.take();
     HSTS_PATH.take();
-    if let Some(root) = PRIVATE_ROOT.take() {
-        sys::remove_tree(&root);
-    }
 }

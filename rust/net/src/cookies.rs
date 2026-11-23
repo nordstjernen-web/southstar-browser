@@ -1,12 +1,13 @@
-//! Southstar — the cookie jar: Netscape-format files per top-level site, read for requests and document.cookie and written from Set-Cookie headers and scripts.
+//! Southstar — the cookie jar: Netscape-format files per top-level site (held in memory in private mode), read for requests and document.cookie and written from Set-Cookie headers and scripts.
 //!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_unicode::until_nul;
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use southstar_netstore::cookies::{self as rules, Context, Cookie};
 
@@ -15,11 +16,40 @@ use crate::{storage, url};
 
 static JAR_WRITE: Mutex<()> = Mutex::new(());
 static JAR_WRITES: AtomicU64 = AtomicU64::new(0);
+static PRIVATE_JARS: Mutex<Option<HashMap<Vec<u8>, Vec<u8>>>> = Mutex::new(None);
+
+fn private_jars() -> MutexGuard<'static, Option<HashMap<Vec<u8>, Vec<u8>>>> {
+    PRIVATE_JARS.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+pub fn forget_private_jars() {
+    *private_jars() = None;
+}
 
 fn read_jar(path: &[u8]) -> Option<Vec<u8>> {
+    if storage::is_private() {
+        return private_jars().as_ref()?.get(path).cloned();
+    }
     sys::read_file(path)
         .ok()
         .map(|contents| until_nul(&contents).to_vec())
+}
+
+fn write_jar(path: &[u8], contents: Vec<u8>) {
+    if storage::is_private() {
+        private_jars()
+            .get_or_insert_with(HashMap::new)
+            .insert(path.to_vec(), contents);
+    } else if sys::write_file(path, &contents) {
+        sys::chmod(path, 0o600);
+    }
+}
+
+fn jar_file_version(path: &[u8]) -> Option<(u64, std::time::SystemTime)> {
+    if storage::is_private() {
+        return None;
+    }
+    sys::version(path)
 }
 
 pub fn collect(target: &[u8], include_httponly: bool) -> Option<Vec<u8>> {
@@ -45,7 +75,7 @@ pub fn jar_version(target: &[u8]) -> Option<u64> {
     JAR_WRITES.load(Ordering::Acquire).hash(&mut hasher);
     for js in [false, true] {
         storage::cookie_jar_path(Some(&site), js)
-            .and_then(|jar| sys::version(&jar))
+            .and_then(|jar| jar_file_version(&jar))
             .hash(&mut hasher);
     }
     Some(hasher.finish())
@@ -112,8 +142,6 @@ fn write_cookie(jar: &[u8], from_http: bool, c: &Cookie, site: &[u8]) {
         }
     }
     let out = rules::store(read_jar(jar).as_deref(), c, from_http);
-    if sys::write_file(jar, &out) {
-        sys::chmod(jar, 0o600);
-    }
+    write_jar(jar, out);
     JAR_WRITES.fetch_add(1, Ordering::Release);
 }
