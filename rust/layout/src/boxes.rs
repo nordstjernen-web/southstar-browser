@@ -461,6 +461,7 @@ box_fields! {
     measured_content_height: f64 = 0.0,
     cb_height_override: f64 = 0.0,
     flex_main: Option<f64> = None,
+    cb_width: Option<f64> = None,
     is_rendered_legend: bool = false,
     skipped_contents: bool = false,
     orthogonal: u8 = 0,
@@ -797,6 +798,14 @@ impl<'a> BoxRef<'a> {
 
     pub fn set_margin(self, e: Edges) {
         self.raw().margin.set(e);
+    }
+
+    pub fn cb_width(self) -> Option<f64> {
+        self.raw().cb_width.get()
+    }
+
+    pub fn set_cb_width(self, width: Option<f64>) {
+        self.raw().cb_width.set(width);
     }
 
     pub fn take_flex_main(self) -> Option<f64> {

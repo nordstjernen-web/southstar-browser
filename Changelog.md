@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Layout: a row flex item's percentage padding and margin resolve against
+  the flex container's content width instead of the item's own width, so
+  `padding-left: 5%` in a 1000px row is 50px, not 5px; the same holds for
+  wrapping rows and nested flex containers. A table used as a flex item
+  now takes its flex main size as its width instead of resolving its
+  `width` percentage a second time. Ported from Nordstjernen.
 * Security: clicking a box that is the root of a 3D-transformed subtree
   with its own background or border no longer overflows the renderer's
   stack. The 3D hit test picked the box's own quad, hit-tested the box,

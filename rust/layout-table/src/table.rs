@@ -7,7 +7,8 @@ use core::ops::Range;
 
 use southstar_layout::{BoxKind, BoxRef, Edges, children};
 use southstar_layout_geom::{
-    edges_from_style, edges_into_box, length_resolve, resolve_used_height, value_is_percent,
+    edges_from_style, edges_into_box, flex_row_item_basis, length_resolve, resolve_used_height,
+    value_is_percent,
 };
 use southstar_style::{Kind, PropId, StyleRef, UNIT_PERCENT, ValueRef, box_style};
 
@@ -424,6 +425,7 @@ fn is_border_box(s: Option<StyleRef<'_>>) -> bool {
 fn content_box_width(
     b: BoxRef<'_>,
     parent_content_width: f64,
+    basis: f64,
     explicit: Option<ValueRef<'_>>,
 ) -> f64 {
     let (m, p, bd) = (b.margin(), b.padding(), b.border());
@@ -434,17 +436,17 @@ fn content_box_width(
         0.0
     };
     let mut cw = match explicit {
-        Some(wv) => length_resolve(Some(wv), parent_content_width, 0.0) - sizing_extras,
+        Some(wv) => length_resolve(Some(wv), basis, 0.0) - sizing_extras,
         None => parent_content_width - horiz_total,
     };
     if let Some(mxw) = definite(value(southstar_style::box_style(b), PropId::MaxWidth)) {
-        let m = length_resolve(Some(mxw), parent_content_width, -1.0);
+        let m = length_resolve(Some(mxw), basis, -1.0);
         if m >= 0.0 && cw > m - sizing_extras {
             cw = m - sizing_extras;
         }
     }
     if let Some(mnw) = definite(value(southstar_style::box_style(b), PropId::MinWidth)) {
-        let m = length_resolve(Some(mnw), parent_content_width, -1.0);
+        let m = length_resolve(Some(mnw), basis, -1.0);
         if m >= 0.0 && cw < m - sizing_extras {
             cw = m - sizing_extras;
         }
@@ -841,10 +843,14 @@ fn stretch_to_height(b: BoxRef<'_>, cw: f64) {
 }
 
 pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: Option<StyleRef<'_>>) {
-    edges_into_box(b, parent_content_width);
+    let basis = flex_row_item_basis(b, parent_content_width);
+    edges_into_box(b, basis);
     let explicit = definite(value(southstar_style::box_style(b), PropId::Width));
     let explicit_width = explicit.is_some();
-    let mut cw = content_box_width(b, parent_content_width, explicit);
+    let mut cw = match b.take_flex_main() {
+        Some(main) => main.max(0.0),
+        None => content_box_width(b, parent_content_width, basis, explicit),
+    };
     b.set_content_width(cw);
     let child_inherited = styled_or(b, inherited);
 
