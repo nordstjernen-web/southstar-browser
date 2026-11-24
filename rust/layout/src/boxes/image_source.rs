@@ -30,3 +30,16 @@ pub fn img_chosen_density(node: Option<Node<'_>>) -> f64 {
         .filter(|&density| density > 0.0)
         .unwrap_or(1.0)
 }
+
+pub fn select_srcset(srcset: &[u8], sizes: Option<&[u8]>) -> Option<Vec<u8>> {
+    let resolve_sizes =
+        |sizes: Option<&[u8]>| southstar_css::sizes_resolve(sizes.unwrap_or_default());
+    crate::srcset::select(
+        Some(srcset),
+        sizes,
+        None,
+        southstar_css_media::device_pixel_ratio(),
+        &resolve_sizes,
+    )
+    .map(|(url, _)| url)
+}

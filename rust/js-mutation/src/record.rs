@@ -182,9 +182,8 @@ pub(crate) fn attribute_changed(
     }
     if let (Some(js), Some(target), Some(name), None) = (js, target, name, namespace_uri)
         && is_link_resource_attr(target, name)
-        && target.attr(name) != old
     {
-        ffi::link_resource_changed(js, target);
+        ffi::link_attribute_changed(js, target, name, old);
     }
     ffi::mark_attr_dirty(target, name, old);
     ffi::emit_attributes(js, target, name, namespace_uri, old);

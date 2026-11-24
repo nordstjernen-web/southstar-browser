@@ -127,6 +127,18 @@ impl Timeline {
             .cloned()
     }
 
+    pub fn claim_preload(&self, realm: usize, url: &[u8]) -> bool {
+        let mut entries = self.entries.borrow_mut();
+        let claimed = entries
+            .iter_mut()
+            .flatten()
+            .find(|e| e.preload_unclaimed && e.realm == realm && e.name == url);
+        claimed.is_some_and(|e| {
+            e.preload_unclaimed = false;
+            true
+        })
+    }
+
     pub fn retain(&self, keep: impl Fn(&Entry) -> bool) {
         if let Some(entries) = self.entries.borrow_mut().as_mut() {
             entries.retain(keep);

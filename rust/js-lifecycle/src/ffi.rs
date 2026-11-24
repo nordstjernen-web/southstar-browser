@@ -43,6 +43,10 @@ impl Js {
         api::in_pump(self.0)
     }
 
+    pub fn tasks_held(self) -> bool {
+        self.in_pump() || (!api::is_worker(self.0) && in_blocking_fetch())
+    }
+
     pub fn eval_depth(self) -> c_int {
         api::eval_depth(self.0)
     }
@@ -235,6 +239,7 @@ impl Js {
 
     pub fn load_blocked(self) -> bool {
         southstar_js_images::image_loads_pending(self.0)
+            || southstar_js_loader::link_sheets_pending(self.0)
             || southstar_js_frames::pending_iframe_count(self.0) > 0
             || southstar_js_loader::has_pending_script_roots(self.0)
             || api::load_delayed(self.0)
@@ -246,6 +251,7 @@ impl Js {
             || frames::has_pending(self)
             || southstar_js_net::pending_fetch_count(self.0) > 0
             || southstar_js_net::pending_xhr_count(self.0) > 0
+            || southstar_js_loader::link_fetches_pending(self.0)
             || southstar_js_net::pending_socket_count(self.0) > 0
             || southstar_js_url::filereader_pending(self.0)
             || southstar_js_frames::pending_iframe_count(self.0) > 0
@@ -261,6 +267,7 @@ impl Js {
             || southstar_js_services::timers_pending(self.0, true)
             || api::message_tasks_pending(self.0)
             || southstar_js_images::image_loads_pending(self.0)
+            || southstar_js_loader::link_sheets_pending(self.0)
     }
 }
 

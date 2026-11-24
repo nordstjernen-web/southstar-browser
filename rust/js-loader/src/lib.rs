@@ -11,6 +11,7 @@ mod fetch;
 pub(crate) mod ffi;
 mod hold;
 mod import_map;
+mod link;
 mod page;
 mod prefetch;
 mod scan;
@@ -120,45 +121,32 @@ pub(crate) fn schedule_for(n: Node) -> Schedule {
     }
 }
 
-pub(crate) fn link_has_pending_load(n: Node) -> bool {
-    if !n.is_tag(southstar_dom::Tag::Link) || n.flags() & FLAG_LINK_LOAD_FIRED != 0 {
-        return false;
-    }
-    let (Some(rel), Some(href)) = (n.attr(c"rel"), n.attr(c"href")) else {
-        return false;
-    };
-    if href.is_empty() {
-        return false;
-    }
-    let mut is_sheet = false;
-    let mut is_alt = false;
-    let mut is_preload = false;
-    for token in rel
-        .to_bytes()
-        .split(|b| matches!(b, b' ' | b'\t' | b'\r' | b'\n' | 0x0c))
-    {
-        if token.eq_ignore_ascii_case(b"stylesheet") {
-            is_sheet = true;
-        } else if token.eq_ignore_ascii_case(b"alternate") {
-            is_alt = true;
-        } else if token.eq_ignore_ascii_case(b"preload") {
-            is_preload = true;
-        }
-    }
-    if is_sheet {
-        return !is_alt;
-    }
-    is_preload
-        && n.attr(c"as")
-            .is_some_and(|as_| as_.to_bytes().eq_ignore_ascii_case(b"style"))
+pub fn link_attribute_changed(js: Option<Page>, link: Node, name: &CStr, old: Option<&CStr>) {
+    link::attribute_changed(Js::of(js), link, name, old);
 }
 
-pub fn link_resource_changed(js: Option<Page>, link: Node) {
-    link.remove_flags(FLAG_LINK_LOAD_FIRED);
+pub fn link_disconnected(js: Option<Page>, node: Node<'_>) {
     let js = Js::of(js);
-    if !js.is_null() && link_has_pending_load(link) && js.in_page(link) {
-        schedule::schedule_deferred_root(js, link);
+    if !js.is_null() {
+        link::disconnected(js, node);
     }
+}
+
+pub fn detach_link_fetches(js: Option<Page>) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        link::detach(js);
+    }
+}
+
+pub fn link_fetches_pending(js: Option<Page>) -> bool {
+    let js = Js::of(js);
+    !js.is_null() && link::fetches_pending(js)
+}
+
+pub fn link_sheets_pending(js: Option<Page>) -> bool {
+    let js = Js::of(js);
+    !js.is_null() && link::sheets_pending(js)
 }
 
 pub fn fire_parsed_stylesheet_loads(js: Option<Page>, doc: Node) {

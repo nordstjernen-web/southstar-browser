@@ -78,6 +78,12 @@ pub(crate) fn realm_document(scope: &mut Scope<'_>) -> Option<Element> {
         .flatten()
 }
 
+pub(crate) fn link_disconnected(js: Js, node: Element) {
+    if let Some(page) = js.ptr() {
+        (api::loader_hooks().link_disconnected)(page, node);
+    }
+}
+
 pub(crate) fn popover_removing(js: Js, node: Element) {
     (api::top_layer_hooks().popover_removing)(js.ptr(), node)
 }

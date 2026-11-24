@@ -518,6 +518,7 @@ fn run_content_script(js: Js, src: &CString) {
 
 pub(crate) fn purge_subtree_script_refs(js: Js, root: Node) {
     js.forget_script_roots_in(root);
+    crate::link::drop_in(js, root);
     js.remove_lifecycle_tasks(|task| {
         core::iter::successors(task, |n| n.parent()).any(|n| n.as_ptr() == root.as_ptr())
     });

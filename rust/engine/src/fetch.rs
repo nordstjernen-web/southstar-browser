@@ -18,7 +18,50 @@ const LAZY_IMAGE_MARGIN_PX: f64 = 4000.0;
 const MAX_DEPTH: u32 = 512;
 
 static LINKED_CSS: Mutex<Option<HashMap<Vec<u8>, Vec<u8>>>> = Mutex::new(None);
+static PRELOAD_RESULTS: Mutex<Option<HashMap<Vec<u8>, PreloadResult>>> = Mutex::new(None);
 static REDIRECTED_AWAY: Mutex<Option<HashSet<Vec<u8>>>> = Mutex::new(None);
+
+#[derive(Clone, Copy)]
+pub struct PreloadResult {
+    pub status: i64,
+    pub start_us: i64,
+    pub end_us: i64,
+}
+
+pub(crate) fn remember_preload_result(url: &[u8], start_us: i64, status: i64) {
+    if status <= 0 {
+        return;
+    }
+    let Ok(mut guard) = PRELOAD_RESULTS.lock() else {
+        return;
+    };
+    guard.get_or_insert_with(HashMap::new).insert(
+        url.to_vec(),
+        PreloadResult {
+            status,
+            start_us,
+            end_us: southstar_glib::monotonic_us(),
+        },
+    );
+}
+
+fn clear_preload_results() {
+    if let Ok(mut guard) = PRELOAD_RESULTS.lock() {
+        *guard = None;
+    }
+}
+
+pub fn preload_result_for(url: &[u8]) -> Option<PreloadResult> {
+    PRELOAD_RESULTS.lock().ok()?.as_ref()?.get(url).copied()
+}
+
+pub fn preload_accept_headers(rel: Option<&CStr>, kind: Option<&CStr>) -> Vec<Vec<u8>> {
+    ffi::accept_headers(destination_for(rel.map(CStr::to_bytes), kind))
+}
+
+pub fn style_accept_headers() -> Vec<Vec<u8>> {
+    ffi::accept_headers(Dest::Style)
+}
 
 fn record_redirect(url: &[u8], away: bool) {
     let Ok(mut guard) = REDIRECTED_AWAY.lock() else {
@@ -269,6 +312,7 @@ pub fn speculative_preload(doc: Node, base: &CStr, include_images: bool) {
     let mut preloads = Preloads::new(doc_base.as_deref().unwrap_or(base), include_images);
     preloads.collect(doc, 0);
     ffi::preload_clear();
+    clear_preload_results();
     for origin in &preloads.connects {
         ffi::preconnect(origin);
     }

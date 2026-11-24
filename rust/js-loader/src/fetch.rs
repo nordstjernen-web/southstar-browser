@@ -9,11 +9,11 @@ use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 
 use crate::eval::ScriptKind;
-use crate::ffi::{self, CSP_SCRIPT, CSP_STYLE, Fetched, Js};
+use crate::ffi::{self, CSP_SCRIPT, Fetched, Js};
 use crate::{
     ALREADY_STARTED, EMPTY_SOURCE, FLAG_LINK_LOAD_FIRED, FLAG_NOT_PARSER_INSERTED,
-    MAX_SCRIPT_BYTES, content_type_is_javascript, page, scan, skipped_by_nomodule, source_is_empty,
-    type_is_module, type_supported,
+    MAX_SCRIPT_BYTES, content_type_is_javascript, link, page, scan, skipped_by_nomodule,
+    source_is_empty, type_is_module, type_supported,
 };
 
 const MODULE_LOAD_MAX_COUNT: u32 = 1024;
@@ -259,68 +259,23 @@ pub(crate) fn run_script_element(js: Js, n: Node, origin: Option<&CStr>) {
     }
 }
 
-pub(crate) fn load_stylesheet_element(js: Js, n: Node, origin: Option<&CStr>) {
-    if n.flags() & FLAG_LINK_LOAD_FIRED != 0 {
-        return;
-    }
-    n.add_flags(FLAG_LINK_LOAD_FIRED);
-    let Some(href) = n
-        .attr(c"href")
-        .filter(|href| !href.is_empty())
-        .map(CStr::to_owned)
-    else {
-        js.dispatch_resource_event(n, c"error");
-        return;
-    };
-    if starts_with(&href, b"data:") {
-        js.dispatch_resource_event(n, c"load");
-        return;
-    }
-    let base = js.base_url(n);
-    let Some(abs_url) = ffi::url_resolve(base.as_deref().or(origin), &href) else {
-        js.dispatch_resource_event(n, c"error");
-        return;
-    };
-    let mut loaded = false;
-    if !js.csp_allows(Some(n), CSP_STYLE, &abs_url, origin, None, true) {
-        js.log(&line(&[b"CSP blocked: stylesheet ", abs_url.to_bytes()]));
-    } else {
-        let info = js.element_perf_info(n);
-        let fetched = js.fetch(&abs_url, origin, false, c"link", &info);
-        if fetched
-            .response
-            .as_ref()
-            .is_some_and(|resp| resp.status() == 200)
-        {
-            loaded = true;
-        } else {
-            let why = failure_reason(&fetched, b"non-200 status");
-            js.log(&line(&[b"stylesheet ", abs_url.to_bytes(), b": ", &why]));
-        }
-    }
-    js.dispatch_resource_event(n, if loaded { c"load" } else { c"error" });
-}
-
 pub(crate) fn fire_parsed_stylesheet_loads(js: Js, doc: Node) {
-    let sheets = scan::pending_stylesheets(doc);
+    let sheets = scan::pending_link_loads(doc);
     if sheets.is_empty() {
         return;
     }
-    let base = js.base_url(doc);
-    let origin = base.as_deref().unwrap_or(c"inline");
+    let origin = js
+        .document_url_of(doc)
+        .unwrap_or_else(|| c"inline".to_owned());
     for link in sheets {
         if js.halted() {
             break;
         }
-        let known = link
-            .attr(c"href")
-            .and_then(|href| ffi::url_resolve(base.as_deref(), href))
-            .is_some_and(|abs| southstar_engine::linked_css_known(abs.to_bytes()));
-        if known {
+        if link::sheet_known(js, link, Some(&origin)) {
             link.add_flags(FLAG_LINK_LOAD_FIRED);
             js.dispatch_resource_event(link, c"load");
         } else {
-            load_stylesheet_element(js, link, Some(origin));
+            link::load_element(js, link, Some(&origin));
         }
     }
 }

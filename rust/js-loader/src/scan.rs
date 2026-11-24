@@ -6,9 +6,8 @@
 use southstar_dom::{MAX_DEPTH, Node};
 
 use crate::ffi::hidden_child;
-use crate::{
-    ALREADY_STARTED, Task, link_has_pending_load, schedule_for, skipped_by_nomodule, type_supported,
-};
+use crate::link::load_pending;
+use crate::{ALREADY_STARTED, Task, schedule_for, skipped_by_nomodule, type_supported};
 
 fn skip(n: Node, depth: i32) -> bool {
     depth >= MAX_DEPTH || (depth > 0 && hidden_child(n))
@@ -77,12 +76,12 @@ pub(crate) fn has_pending_script(root: Node) -> bool {
     walk(root, 0)
 }
 
-pub(crate) fn pending_stylesheets(root: Node<'_>) -> Vec<Node<'_>> {
+pub(crate) fn pending_link_loads(root: Node<'_>) -> Vec<Node<'_>> {
     fn walk<'a>(n: Node<'a>, out: &mut Vec<Node<'a>>, depth: i32) {
         if skip(n, depth) {
             return;
         }
-        if link_has_pending_load(n) {
+        if load_pending(n) {
             out.push(n);
             return;
         }

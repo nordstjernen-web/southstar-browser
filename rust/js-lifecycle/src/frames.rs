@@ -322,7 +322,7 @@ fn run_one(js: Js, request: Request, now_us: i64) {
 }
 
 pub(crate) fn run(js: Js) -> bool {
-    if js.halted() || js.in_pump() {
+    if js.halted() || js.tasks_held() {
         return false;
     }
     scrollend::flush(js);

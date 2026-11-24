@@ -9,7 +9,7 @@ mod media;
 mod store;
 
 pub use image_map::image_map_area;
-pub use image_source::{choose_img, img_chosen_density, img_chosen_url};
+pub use image_source::{choose_img, img_chosen_density, img_chosen_url, select_srcset};
 pub use media::{MediaHandle, MediaRef, NsBoxMedia};
 pub use store::{BoxPool, LinkVec};
 

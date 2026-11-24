@@ -277,6 +277,9 @@ pub(crate) fn add_resource_entry(
         return;
     }
     let realm = realm_key(js, info.timeline);
+    if !info.preload && timeline.claim_preload(realm, fetch.url) {
+        return;
+    }
     let origin = timeline::time_origin_us(js, realm);
     push_to_timeline(js, entry::resource_entry(realm, origin, info, fetch, resp));
 }

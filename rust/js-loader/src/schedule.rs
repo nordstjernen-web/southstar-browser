@@ -11,11 +11,16 @@ use southstar_dom::{Kind, Node, WeakNode};
 use crate::ffi::Js;
 use crate::{
     ALREADY_STARTED, EMPTY_SOURCE, FLAG_NOT_PARSER_INSERTED, Schedule, Task, fetch, hold,
-    import_map, page, scan, type_is_module,
+    import_map, link, page, scan, type_is_module,
 };
 
 fn origin_of(js: Js, root: Node) -> CString {
     js.base_url(root).unwrap_or_else(|| c"inline".to_owned())
+}
+
+fn link_origin_of(js: Js, root: Node) -> CString {
+    js.document_url_of(root)
+        .unwrap_or_else(|| c"inline".to_owned())
 }
 
 pub(crate) fn run_schedule(js: Js, tasks: &[Task], which: Schedule, origin: Option<&CStr>) {
@@ -140,7 +145,7 @@ fn drain_deferred(js: Js) {
         let Some(root) = root.get().filter(|root| js.in_page(*root)) else {
             continue;
         };
-        let sheets = scan::pending_stylesheets(root);
+        let sheets = scan::pending_link_loads(root);
         if !scan::has_pending_script(root) && sheets.is_empty() {
             continue;
         }
@@ -152,8 +157,9 @@ fn drain_deferred(js: Js) {
         if tasks.iter().any(|task| task.schedule == Schedule::Async) {
             schedule_async_root(js, root);
         }
+        let link_origin = link_origin_of(js, root);
         for sheet in sheets {
-            fetch::load_stylesheet_element(js, sheet, Some(&origin));
+            link::load_element(js, sheet, Some(&link_origin));
         }
         break;
     }
@@ -204,7 +210,7 @@ pub(crate) fn run_inserted_scripts(js: Js, root: Node) {
         return;
     }
     js.schedule_static_iframes(root);
-    let sheets = scan::pending_stylesheets(root);
+    let sheets = scan::pending_link_loads(root);
     if !scan::has_pending_script(root) && sheets.is_empty() {
         return;
     }
@@ -233,7 +239,8 @@ pub(crate) fn run_inserted_scripts(js: Js, root: Node) {
     if have_external {
         schedule_async_root(js, root);
     }
+    let link_origin = link_origin_of(js, root);
     for sheet in sheets {
-        fetch::load_stylesheet_element(js, sheet, Some(&origin));
+        link::load_element(js, sheet, Some(&link_origin));
     }
 }

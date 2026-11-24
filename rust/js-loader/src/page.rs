@@ -4,13 +4,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::PageList;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 use southstar_dom::{Node, WeakNode};
 
 use crate::Task;
 use crate::ffi::Js;
 use crate::hold::Hold;
+use crate::link::LinkFetch;
 use southstar_glib::SourceId;
 
 #[derive(Default)]
@@ -25,6 +27,8 @@ pub(crate) struct Page {
     pub module_load_capped: bool,
     pub lifecycle_tasks: Option<Vec<Task<'static>>>,
     pub prefetched: HashSet<Vec<u8>>,
+    pub link_fetches: Vec<Rc<LinkFetch>>,
+    pub link_results: HashMap<Vec<u8>, i64>,
 }
 
 thread_local! {
@@ -84,6 +88,7 @@ pub(crate) fn forget_roots_in(js: Js, root: Node<'_>) {
 }
 
 pub(crate) fn teardown(js: Js) {
+    crate::link::detach(js);
     let page = PAGES.with(|pages| pages.take(js.key()));
     if let Some(page) = page {
         if let Some(source) = page.async_source {

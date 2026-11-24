@@ -30,9 +30,9 @@ pub use css::{
 };
 pub use images::{ImageCache, ImageSession, Wanted, collect_images};
 pub use net::{
-    Bytes, CssCache, Dest, Post, fetch_blocking, fetch_blocking_with_headers, navigate_blocking,
-    nosniff, preconnect, preload_clear, preload_request, url_is_http_or_https, url_origin,
-    url_resolve,
+    Bytes, CssCache, Dest, Post, accept_headers, fetch_blocking, fetch_blocking_with_headers,
+    navigate_blocking, nosniff, preconnect, preload_clear, preload_request, url_is_http_or_https,
+    url_origin, url_resolve,
 };
 
 use crate::fetch;

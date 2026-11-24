@@ -151,6 +151,7 @@ pub struct LoaderHooks {
     pub schedule_pending_script_drain: fn(Page),
     pub purge_subtree_script_refs: fn(Page, Node<'_>),
     pub parser_hold_forget: fn(Page, Node<'_>),
+    pub link_disconnected: fn(Page, Node<'_>),
     pub teardown: fn(Page),
     pub element_perf_info: fn(Option<Page>, Option<Node<'_>>) -> ResourceInfo,
 }
@@ -162,6 +163,7 @@ impl LoaderHooks {
         schedule_pending_script_drain: |_| {},
         purge_subtree_script_refs: |_, _| {},
         parser_hold_forget: |_, _| {},
+        link_disconnected: |_, _| {},
         teardown: |_| {},
         element_perf_info: |_, _| ResourceInfo::default(),
     };

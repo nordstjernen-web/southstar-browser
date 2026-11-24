@@ -18,6 +18,10 @@ pub(crate) use southstar_js_runtime::api::ResourceInfo as PerfInfo;
 
 pub(crate) const CSP_SCRIPT: usize = southstar_csp::SCRIPT;
 pub(crate) const CSP_STYLE: usize = southstar_csp::STYLE;
+pub(crate) const CSP_IMG: usize = southstar_csp::IMG;
+pub(crate) const CSP_MEDIA: usize = southstar_csp::MEDIA;
+pub(crate) const CSP_CONNECT: usize = southstar_csp::CONNECT;
+pub(crate) const CSP_FONT: usize = southstar_csp::FONT;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(Option<Page>);
@@ -139,6 +143,10 @@ impl Js {
         Js(js)
     }
 
+    pub(crate) fn page(self) -> Option<Page> {
+        self.0
+    }
+
     pub(crate) fn key(self) -> usize {
         self.0.map_or(0, Page::addr)
     }
@@ -193,6 +201,14 @@ impl Js {
 
     pub(crate) fn base_url(self, n: Node) -> Option<CString> {
         (api::document_hooks().node_base_url)(self.0, n).and_then(|url| CString::new(url).ok())
+    }
+
+    pub(crate) fn document_url_of(self, n: Node) -> Option<CString> {
+        api::node_doc_base(self.0, Some(n))
+    }
+
+    pub(crate) fn tasks_held(self) -> bool {
+        self.in_pump() || (!api::is_worker(self.0) && southstar_net::in_blocking_fetch())
     }
 
     pub(crate) fn dispatch_resource_event(self, n: Node, ty: &CStr) {
@@ -522,6 +538,7 @@ pub fn install_runtime_hooks() {
         schedule_pending_script_drain: |js| crate::schedule_pending_script_drain(Some(js)),
         purge_subtree_script_refs: |js, a1| purge_subtree_script_refs(Some(js), a1),
         parser_hold_forget: |js, a1| parser_hold_forget(Some(js), a1),
+        link_disconnected: |js, a1| crate::link_disconnected(Some(js), a1),
         teardown: |js| teardown(Some(js)),
         element_perf_info: crate::api::element_perf_info,
     });

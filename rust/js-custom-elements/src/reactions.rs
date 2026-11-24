@@ -369,6 +369,7 @@ fn disconnect_rec(scope: &mut Scope<'_>, js: Js, root: Element, top: Element, de
     if depth >= MAX_DEPTH {
         return;
     }
+    ffi::link_disconnected(js, root);
     if root.is_element() {
         form_associated::removing(scope, js, root, top);
         ffi::popover_removing(js, root);

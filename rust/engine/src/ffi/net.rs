@@ -4,7 +4,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_int};
+use core::ffi::{CStr, c_int, c_long};
 use southstar_unicode::c_string_until_nul;
 use southstar_unicode::until_nul;
 use std::collections::{BTreeMap, HashMap};
@@ -50,7 +50,7 @@ pub fn nosniff(resp: &Response) -> bool {
         .is_some_and(|value| southstar_net::header_is_nosniff(value.to_bytes()))
 }
 
-fn accept_headers(dest: Dest) -> Vec<Vec<u8>> {
+pub fn accept_headers(dest: Dest) -> Vec<Vec<u8>> {
     southstar_net::accept_header_lines(dest as c_int)
 }
 
@@ -263,7 +263,14 @@ pub fn preconnect(origin: &[u8]) {
     southstar_net::preconnect_async(&c_string_until_nul(origin));
 }
 
+#[allow(clippy::unnecessary_cast)]
+fn long(value: c_long) -> i64 {
+    value as i64
+}
+
 pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
+    let key = url.to_vec();
+    let start_us = glib::monotonic_us();
     let url = c_string_until_nul(url);
     let headers = accept_headers(dest);
     if dest != Dest::Default
@@ -284,7 +291,11 @@ pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
         content_type: None,
         headers,
     }
-    .submit(None, drop);
+    .submit(None, move |outcome| {
+        if let Ok(resp) = outcome {
+            crate::fetch::remember_preload_result(&key, start_us, long(resp.status()));
+        }
+    });
 }
 
 pub fn request_async(url: &CStr, base: &CStr, dest: Dest, done: impl FnOnce(Outcome) + 'static) {

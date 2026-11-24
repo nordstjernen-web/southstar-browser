@@ -3,6 +3,26 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* DOM: `<link rel="preload">` loads for every known `as` (style, script,
+  font, image, track, fetch), not only `style`, in the background, and
+  fires `load` or `error` for parser-inserted and script-inserted links.
+  The fetch reuses what the engine's preloader already fetched, and a
+  preload that becomes a stylesheet takes its `load` from the preload's
+  response and keeps one resource timing entry. A `media` that does not
+  match or a `type` the `as` cannot use skips the preload without an
+  event; a Content-Security-Policy violation (with the element's nonce)
+  or mixed content gives `error` and sends no request; `fetch` and
+  `track` preloads load on any HTTP response, the others on a 2xx
+  status, each link by its own rule when two links share one fetch. A
+  link loads again when it is inserted again; switching `rel` back from
+  `stylesheet` to `preload` fetches nothing, so a handler that toggles
+  `rel` can no longer loop (it sent thousands of requests before). An
+  `as=image` preload with only `imagesrcset` loads the chosen candidate.
+  A preload does not hold back the window `load` event or run the
+  script, and animation frames wait while the engine blocks on a
+  stylesheet fetch. Links found by the parser use the document URL, not
+  `<base>`, as the origin for CSP `'self'`, mixed content and the
+  referrer. Ported from Nordstjernen.
 * Layout: sibling `display: table-cell` boxes stay side by side in one
   anonymous table row when an HTML comment, collapsible white space, a
   `display: none` element or a non-rendering element such as `<script>`

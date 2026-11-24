@@ -72,8 +72,8 @@ pub(crate) fn mark_restyle_dirty(node: Option<Element>) {
     }
 }
 
-pub(crate) fn link_resource_changed(js: Js, link: Element) {
-    southstar_js_loader::link_resource_changed(Some(js.0), link);
+pub(crate) fn link_attribute_changed(js: Js, link: Element, name: &CStr, old: Option<&CStr>) {
+    southstar_js_loader::link_attribute_changed(Some(js.0), link, name, old);
 }
 
 pub(crate) fn attr_may_affect_style(target: Element, name: &CStr) -> bool {

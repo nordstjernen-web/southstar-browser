@@ -52,6 +52,7 @@ pub(crate) struct Entry {
     pub response_status: i32,
     pub phases: Phases,
     pub render_blocking: bool,
+    pub preload_unclaimed: bool,
     pub realm: usize,
 }
 
@@ -77,6 +78,7 @@ pub(crate) struct ResourceInfo<'a> {
     pub document_url: Option<&'a [u8]>,
     pub render_blocking: bool,
     pub cors_mode: bool,
+    pub preload: bool,
     pub next_hop_protocol: Option<&'a [u8]>,
     pub timing_allow_origin: Option<&'a [u8]>,
     pub status: i64,
@@ -292,6 +294,7 @@ pub(crate) fn resource_entry(
         kind: b"resource".to_vec(),
         initiator_type: Some(fetch.initiator.unwrap_or(b"other").to_vec()),
         render_blocking: info.render_blocking,
+        preload_unclaimed: info.preload,
         start_time,
         duration: end - start_time,
         response_status: visible_status(info, resp, fetch.url, fetch.initiator),

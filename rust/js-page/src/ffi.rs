@@ -178,6 +178,7 @@ impl Js {
         southstar_css::clear_defined_elements();
         southstar_css::clear_registered_properties();
         southstar_js_loader::cancel_async_scripts(self.0);
+        southstar_js_loader::detach_link_fetches(self.0);
         southstar_js_attrs::detach_all(self.0);
         southstar_js_mutation::attribute_maps_release_all(self.0);
         api::release_pinned_wrappers(self.0);
