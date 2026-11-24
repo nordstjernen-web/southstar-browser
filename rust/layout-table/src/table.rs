@@ -430,15 +430,27 @@ fn content_box_width(
 ) -> f64 {
     let (m, p, bd) = (b.margin(), b.padding(), b.border());
     let horiz_total = m.left + m.right + p.left + p.right + bd.left + bd.right;
-    let sizing_extras = if is_border_box(southstar_style::box_style(b)) {
+    let sizing_extras = sizing_extras_of(b);
+    let initial = match b.take_flex_main() {
+        Some(main) => main,
+        None => match explicit {
+            Some(wv) => length_resolve(Some(wv), basis, 0.0) - sizing_extras,
+            None => parent_content_width - horiz_total,
+        },
+    };
+    clamp_width(b, basis, sizing_extras, initial)
+}
+
+fn sizing_extras_of(b: BoxRef<'_>) -> f64 {
+    let (p, bd) = (b.padding(), b.border());
+    if is_border_box(southstar_style::box_style(b)) {
         p.left + p.right + bd.left + bd.right
     } else {
         0.0
-    };
-    let mut cw = match explicit {
-        Some(wv) => length_resolve(Some(wv), basis, 0.0) - sizing_extras,
-        None => parent_content_width - horiz_total,
-    };
+    }
+}
+
+fn clamp_width(b: BoxRef<'_>, basis: f64, sizing_extras: f64, mut cw: f64) -> f64 {
     if let Some(mxw) = definite(value(southstar_style::box_style(b), PropId::MaxWidth)) {
         let m = length_resolve(Some(mxw), basis, -1.0);
         if m >= 0.0 && cw > m - sizing_extras {
@@ -847,10 +859,7 @@ pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: Option<StyleR
     edges_into_box(b, basis);
     let explicit = definite(value(southstar_style::box_style(b), PropId::Width));
     let explicit_width = explicit.is_some();
-    let mut cw = match b.take_flex_main() {
-        Some(main) => main.max(0.0),
-        None => content_box_width(b, parent_content_width, basis, explicit),
-    };
+    let mut cw = content_box_width(b, parent_content_width, basis, explicit);
     b.set_content_width(cw);
     let child_inherited = styled_or(b, inherited);
 
