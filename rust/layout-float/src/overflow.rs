@@ -43,7 +43,7 @@ fn keyword_in(ov: Option<&CStr>, words: &[&str]) -> bool {
     })
 }
 
-fn kw_clips(ov: Option<&CStr>) -> bool {
+pub fn kw_clips(ov: Option<&CStr>) -> bool {
     keyword_in(ov, &["hidden", "clip", "auto", "scroll"])
 }
 
@@ -51,7 +51,7 @@ pub fn kw_scrolls(ov: Option<&CStr>) -> bool {
     keyword_in(ov, &["auto", "scroll"])
 }
 
-fn kw_scroll_container(ov: Option<&CStr>) -> bool {
+pub fn kw_scroll_container(ov: Option<&CStr>) -> bool {
     kw_clips(ov) && !keyword_in(ov, &["clip"])
 }
 

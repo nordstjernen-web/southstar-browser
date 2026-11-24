@@ -3,6 +3,20 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Layout: an absolutely positioned box inside a scrolling element
+  (`overflow: auto` or `scroll`) now counts toward how far that element
+  can scroll when the element or a box between it and the positioned box
+  is the containing block, including the box's own descendants and boxes
+  inside inline-blocks. Before, `scrollWidth` reported the overflow but
+  `scrollLeft` stayed at 0, so a 410px-wide positioned bar in a 200px
+  scroller could not be scrolled; it now scrolls up to 210px, rounded to
+  whole pixels. Transformed boxes and everything inside them, fixed
+  boxes, zero-size boxes, `content-visibility` subtrees and subtrees
+  clipped by an inner `overflow` are not counted. In right-to-left and
+  reversed (`row-reverse`, `column-reverse`, `wrap-reverse`) scrollers
+  the flipped axis gets no range and boxes lying past its start edge are
+  ignored on the other axis; the page's own `html`/`body` scroller is
+  untouched. Ported from Nordstjernen.
 * Layout: sibling `display: table-cell` boxes stay side by side in one
   anonymous table row when an HTML comment, collapsible white space, a
   `display: none` element or a non-rendering element such as `<script>`
