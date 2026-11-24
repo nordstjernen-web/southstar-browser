@@ -13,7 +13,7 @@ use crate::ffi::{Canvas, FORMAT_A8, Matrix, Segment, Surface, SvgGeometry};
 use crate::state::{State, max, min};
 use crate::{
     Ctx, HEIGHT, MAX_DEPTH, MAX_NESTING, MAX_NODES, SVG_X, SVG_Y, WIDTH, attr_length, is_element,
-    name_is, never_rendered, switch_choice, tag, viewbox_matrix, viewbox_size,
+    name_is, renderable, switch_choice, tag, viewbox_matrix, viewbox_size,
 };
 
 #[derive(Default, Clone, Copy)]
@@ -241,7 +241,7 @@ impl<'a> Measure<'a> {
             b"use" => self.use_element(ctx, n, st, frame, own),
             b"text" | b"tspan" => self.text(ctx, n, st, own),
             b"rect" | b"image" | b"foreignObject" => self.positioned_box(ctx, n, st, own),
-            _ if matches!(t, b"g" | b"a" | b"svg") || never_rendered(t) => {
+            _ if matches!(t, b"g" | b"a" | b"svg") || !renderable(t) => {
                 self.children(ctx, n, st, frame, own)
             }
             _ => self.shape(ctx, n, st, own),
@@ -274,7 +274,7 @@ impl<'a> Measure<'a> {
         outer: &Frame,
         outer_extent: &mut Extent,
     ) {
-        let never = never_rendered(tag(n));
+        let never = !renderable(tag(n));
         let hidden = ctx.is_hidden(n);
         if never || hidden {
             if self.inside {

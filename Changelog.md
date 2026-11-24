@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* SVG elements that never render (`animate`, `set`, `animateTransform`,
+  `animateMotion`, `mpath`, `discard`, `view` and unknown elements, besides
+  `defs`, `symbol`, gradients and the like) report an empty
+  `getBoundingClientRect()` and no `getClientRects()`, instead of a 0x0 rect
+  at the parent's origin, and take no part in geometry. Icons with hundreds
+  of animation elements no longer report that many empty rects. Ported from
+  Nordstjernen.
 * Security: clicking a box that is the root of a 3D-transformed subtree
   with its own background or border no longer overflows the renderer's
   stack. The 3D hit test picked the box's own quad, hit-tested the box,
