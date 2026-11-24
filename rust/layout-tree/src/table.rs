@@ -11,8 +11,8 @@ use southstar_style::{Display, StyleRef, display_of};
 use crate::ffi::{
     Styles, append_display_contents_children, append_generated_after, append_node_children,
     build_block, build_inline_run, build_pseudo_block_for, build_pseudo_inline_for,
-    collect_box_bg_image, continues_inline_run, is_inline_dom, parse_int, queue_absolute_node,
-    register_abs_pseudo, tag_is_non_rendering,
+    collect_box_bg_image, continues_inline_run, is_inline_dom, is_table_run_gap, parse_int,
+    queue_absolute_node, register_abs_pseudo, tag_is_non_rendering,
 };
 use crate::runs::{append_child, merge_prefix};
 
@@ -565,6 +565,33 @@ pub fn build_table<'a>(n: Node<'_>, styles: Styles) -> BoxRef<'a> {
     table
 }
 
+fn flush_anonymous_cell_run(
+    table: BoxRef<'_>,
+    cells: &mut Option<Node<'_>>,
+    end: Option<Node<'_>>,
+    styles: Styles,
+) {
+    if cells.is_none() {
+        return;
+    }
+    if let Some(row) = build_row_from_cell_run(*cells, end, None, styles) {
+        append_child(table, row);
+    }
+    *cells = None;
+}
+
+fn append_anonymous_table_rows(table: BoxRef<'_>, c: Node<'_>, styles: Styles) {
+    if is_table_row(c, styles) {
+        append_child(table, build_table_row(c, styles));
+    } else if node_is_row_group(c, styles) {
+        for r in siblings_from(c.first_child()) {
+            if is_table_row(r, styles) {
+                append_child(table, build_table_row(r, styles));
+            }
+        }
+    }
+}
+
 pub fn build_anonymous_table<'a>(
     start: Option<Node<'_>>,
     end: Option<Node<'_>>,
@@ -584,27 +611,13 @@ pub fn build_anonymous_table<'a>(
             }
             continue;
         }
-        if cells.is_some() {
-            if let Some(row) = build_row_from_cell_run(cells, Some(c), None, styles) {
-                append_child(table, row);
-            }
-            cells = None;
+        if is_table_run_gap(c, styles) {
+            continue;
         }
-        if is_table_row(c, styles) {
-            append_child(table, build_table_row(c, styles));
-        } else if node_is_row_group(c, styles) {
-            for r in siblings_from(c.first_child()) {
-                if is_table_row(r, styles) {
-                    append_child(table, build_table_row(r, styles));
-                }
-            }
-        }
+        flush_anonymous_cell_run(table, &mut cells, Some(c), styles);
+        append_anonymous_table_rows(table, c, styles);
     }
-    if cells.is_some()
-        && let Some(row) = build_row_from_cell_run(cells, end, None, styles)
-    {
-        append_child(table, row);
-    }
+    flush_anonymous_cell_run(table, &mut cells, end, styles);
     if table.first_child().is_some() {
         return Some(table);
     }

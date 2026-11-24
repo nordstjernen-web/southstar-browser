@@ -24,6 +24,7 @@ pub struct Builders {
     pub append_generated_after: fn(BoxRef<'_>, BoxRef<'static>),
     pub is_inline_dom: fn(Node<'_>, Styles) -> bool,
     pub continues_inline_run: fn(Node<'_>, Styles) -> bool,
+    pub is_table_run_gap: fn(Node<'_>, Styles) -> bool,
 }
 
 static BUILDERS: OnceLock<Builders> = OnceLock::new();
@@ -92,6 +93,10 @@ pub fn is_inline_dom(n: Node<'_>, styles: Styles) -> bool {
 
 pub fn continues_inline_run(n: Node<'_>, styles: Styles) -> bool {
     (builders().continues_inline_run)(n, styles)
+}
+
+pub fn is_table_run_gap(n: Node<'_>, styles: Styles) -> bool {
+    (builders().is_table_run_gap)(n, styles)
 }
 
 pub fn parse_int(s: Option<&CStr>, dflt: i32, min_v: i32, max_v: i32) -> i32 {
