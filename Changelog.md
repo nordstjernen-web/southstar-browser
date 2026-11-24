@@ -11,6 +11,14 @@ Southstar Browser 1.0.12-dev:
   set width that is a flex item now takes the width the flex layout
   gives it, within its `max-width` and `min-width`, instead of
   resolving its `width` percentage a second time. Ported from Nordstjernen.
+* Layout: sibling `display: table-cell` boxes stay side by side in one
+  anonymous table row when an HTML comment, collapsible white space, a
+  `display: none` element or a non-rendering element such as `<script>`
+  sits between them; before, the node ended the anonymous table or row
+  and the next cell was laid out below. White space that the parent's
+  `white-space` keeps (`pre`, `pre-wrap`, `pre-line`, `break-spaces`)
+  has its own box and now ends the anonymous table instead of being
+  swallowed into it. Ported from Nordstjernen.
 * Security: clicking a box that is the root of a 3D-transformed subtree
   with its own background or border no longer overflows the renderer's
   stack. The 3D hit test picked the box's own quad, hit-tested the box,

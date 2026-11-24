@@ -20,7 +20,7 @@ use southstar_style::{StyleRef, StyleTable};
 use crate::atomic::{node_is_frame_fallback, style_has_atomic_inline_box};
 use crate::classify::{
     SHADOW_ATTR, contains_block_media, continues_inline_run, is_inline_dom,
-    node_has_media_metadata, text_is_ws_only,
+    node_has_media_metadata, node_is_table_run_gap, text_is_ws_only,
 };
 use crate::ffi;
 use crate::generated::{
@@ -687,7 +687,7 @@ fn build_container(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -> 
             let mut end = Some(cur);
             while let Some(e) = end {
                 if !(ffi::node_is_table_internal(Some(e), styles)
-                    || (e.is_text() && text_is_ws_only(e.text())))
+                    || node_is_table_run_gap(e, styles))
                 {
                     break;
                 }

@@ -95,6 +95,10 @@ fn continues_inline_run(n: Node<'_>, st: StyleTable) -> bool {
     classify::continues_inline_run(Some(n), st)
 }
 
+fn is_table_run_gap(n: Node<'_>, st: StyleTable) -> bool {
+    classify::node_is_table_run_gap(n, st)
+}
+
 fn peek_image(src: &CStr) -> Option<southstar_layout::MediaHandle> {
     media::peek_image(Some(src))
 }
@@ -115,6 +119,7 @@ pub fn install_builders() {
             append_generated_after,
             is_inline_dom,
             continues_inline_run,
+            is_table_run_gap,
         });
         southstar_layout_content::install_image_peek(peek_image);
     });
