@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* `MutationObserver` keeps observing a removed or moved subtree until
+  observers are notified, as the DOM Standard's transient registered
+  observers do: a `subtree` observer receives the mutations made to a
+  node after it was removed from the observed tree, `observe()` and
+  `disconnect()` drop them, and `takeRecords()` keeps them. A removal
+  queues the notification microtask, and the microtask is queued only
+  when a record or a transient registration was made.
 * Security: clicking a box that is the root of a 3D-transformed subtree
   with its own background or border no longer overflows the renderer's
   stack. The 3D hit test picked the box's own quad, hit-tested the box,

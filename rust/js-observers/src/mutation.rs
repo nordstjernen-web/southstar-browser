@@ -4,6 +4,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
 use southstar_dom::{Node, WeakNode};
@@ -14,6 +15,7 @@ use crate::{bind, bind_if_not_callable, page, page_or_new, set, set_index};
 
 #[derive(Default)]
 struct Target {
+    id: u32,
     node: Option<WeakNode>,
     subtree: bool,
     child_list: bool,
@@ -77,6 +79,78 @@ struct State {
     pin: Option<Value>,
     targets: Vec<Target>,
     records: Vec<Record>,
+    transients: HashMap<WeakNode, Vec<u32>>,
+    next_target_id: u32,
+}
+
+impl State {
+    fn transient_sources(&self, node: Option<WeakNode>) -> Vec<u32> {
+        let mut sources = Vec::new();
+        if self.transients.is_empty() {
+            return sources;
+        }
+        let mut cursor = node.and_then(WeakNode::get);
+        while let Some(n) = cursor {
+            if let Some(ids) = self.transients.get(&n.downgrade()) {
+                sources.extend_from_slice(ids);
+            }
+            cursor = n.parent();
+        }
+        sources
+    }
+
+    fn matching(
+        &self,
+        node: Option<WeakNode>,
+        accept: &dyn Fn(&Target) -> bool,
+    ) -> Option<&Target> {
+        self.targets
+            .iter()
+            .find(|t| t.covers(node) && accept(t))
+            .or_else(|| {
+                let sources = self.transient_sources(node);
+                if sources.is_empty() {
+                    return None;
+                }
+                self.targets
+                    .iter()
+                    .find(|t| sources.contains(&t.id) && accept(t))
+            })
+    }
+
+    fn add_transients(&mut self, parent: Option<WeakNode>, removed: &[WeakNode]) -> bool {
+        if removed.is_empty() {
+            return false;
+        }
+        let mut sources = self.transient_sources(parent);
+        sources.extend(
+            self.targets
+                .iter()
+                .filter(|t| t.subtree && t.covers(parent))
+                .map(|t| t.id),
+        );
+        sources.sort_unstable();
+        sources.dedup();
+        if sources.is_empty() {
+            return false;
+        }
+        for &node in removed {
+            let held = self.transients.entry(node).or_default();
+            for &source in &sources {
+                if !held.contains(&source) {
+                    held.push(source);
+                }
+            }
+        }
+        true
+    }
+
+    fn drop_transients_of(&mut self, source: u32) {
+        self.transients.retain(|_, held| {
+            held.retain(|&id| id != source);
+            !held.is_empty()
+        });
+    }
 }
 
 pub(crate) struct Observer {
@@ -108,6 +182,7 @@ impl Observer {
             let mut state = self.state.borrow_mut();
             state.disconnected = true;
             state.targets.clear();
+            state.transients.clear();
             state.records.clear();
             state.pin.take()
         };
@@ -119,6 +194,7 @@ impl Observer {
         state.disconnected = true;
         state.records.clear();
         state.targets.clear();
+        state.transients.clear();
     }
 }
 
@@ -171,14 +247,18 @@ pub(crate) fn emit(js: Js, emit: &Emit<'_>) {
     arm_list(emit.added.as_deref());
     arm_list(emit.removed.as_deref());
     arm(&[emit.previous_sibling, emit.next_sibling]);
+    let mut queued = false;
     for observer in &observers {
         let mut state = observer.state.borrow_mut();
         if state.disconnected {
             continue;
         }
-        let Some(target) = state.targets.iter().find(|t| {
-            t.covers(emit.target)
-                && (!wants_child || t.child_list)
+        if wants_child {
+            queued |=
+                state.add_transients(emit.target, emit.removed.as_deref().unwrap_or_default());
+        }
+        let Some(target) = state.matching(emit.target, &|t| {
+            (!wants_child || t.child_list)
                 && (!wants_attr || t.attributes)
                 && (!wants_cdata || t.character_data)
                 && (!wants_attr || t.filter_matches(emit.attribute_name))
@@ -199,8 +279,11 @@ pub(crate) fn emit(js: Js, emit: &Emit<'_>) {
             old_value: emit.old_value.filter(|_| keeps_old).map(<[u8]>::to_vec),
         };
         state.records.push(record);
+        queued = true;
     }
-    schedule_drain(js);
+    if queued {
+        schedule_drain(js);
+    }
 }
 
 pub(crate) fn emit_child_list(
@@ -224,16 +307,14 @@ pub(crate) fn emit_child_list(
     arm_list(added.as_deref());
     arm_list(removed.as_deref());
     arm(&[previous_sibling, next_sibling]);
+    let mut queued = false;
     for observer in &observers {
         let mut state = observer.state.borrow_mut();
         if state.disconnected {
             continue;
         }
-        if !state
-            .targets
-            .iter()
-            .any(|t| t.child_list && t.covers(target))
-        {
+        queued |= state.add_transients(target, removed.as_deref().unwrap_or_default());
+        if state.matching(target, &|t| t.child_list).is_none() {
             continue;
         }
         state.records.push(Record {
@@ -247,8 +328,11 @@ pub(crate) fn emit_child_list(
             attribute_namespace: None,
             old_value: None,
         });
+        queued = true;
     }
-    schedule_drain(js);
+    if queued {
+        schedule_drain(js);
+    }
 }
 
 pub(crate) fn scrub_node(js: Js, node: WeakNode) {
@@ -269,6 +353,7 @@ pub(crate) fn scrub_node(js: Js, node: WeakNode) {
     };
     for observer in &observers {
         let mut state = observer.state.borrow_mut();
+        state.transients.remove(&node);
         for target in &mut state.targets {
             clear(&mut target.node);
         }
@@ -374,7 +459,7 @@ fn drain(scope: &mut Scope<'_>) {
         .into_iter()
         .filter_map(|observer| {
             let state = observer.state.borrow();
-            if state.disconnected || state.records.is_empty() {
+            if state.disconnected || (state.records.is_empty() && state.transients.is_empty()) {
                 return None;
             }
             let wrapper = state.pin.clone()?;
@@ -385,11 +470,15 @@ fn drain(scope: &mut Scope<'_>) {
     for (observer, wrapper) in &pending {
         let records = {
             let mut state = observer.state.borrow_mut();
-            if state.disconnected || state.records.is_empty() {
+            if state.disconnected {
                 continue;
             }
+            state.transients.clear();
             core::mem::take(&mut state.records)
         };
+        if records.is_empty() {
+            continue;
+        }
         let array = records_array(scope, &records);
         drop(records);
         let callback = observer.callback.clone();
@@ -489,7 +578,12 @@ pub(crate) fn observe(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Re
     }
     let mut state = observer.state.borrow_mut();
     if let Some(index) = state.targets.iter().position(|e| e.node == Some(node)) {
-        state.targets.remove(index);
+        let replaced = state.targets.remove(index);
+        t.id = replaced.id;
+        state.drop_transients_of(replaced.id);
+    } else {
+        t.id = state.next_target_id;
+        state.next_target_id += 1;
     }
     state.targets.push(t);
     state.disconnected = false;
