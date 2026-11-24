@@ -15,6 +15,7 @@ use southstar_layout_geom::{
 use southstar_style::{StyleTable, display_of};
 
 use crate::atomic::is_inline_level_replaced;
+use crate::collect::{WS_COLLAPSE, white_space_mode};
 use crate::ffi;
 use crate::state;
 
@@ -212,6 +213,16 @@ fn node_leaves_inline_run_open(n: Node<'_>, styles: StyleTable) -> bool {
     }
     let s = styles.get(n);
     s.is_some() && style_is_none(s)
+}
+
+pub fn node_is_table_run_gap(n: Node<'_>, styles: StyleTable) -> bool {
+    if n.is_text() {
+        return text_is_ws_only(n.text()) && white_space_mode(n, styles) == WS_COLLAPSE;
+    }
+    if n.is_element() && tags::is_non_rendering(n.name()) {
+        return true;
+    }
+    node_leaves_inline_run_open(n, styles)
 }
 
 pub fn continues_inline_run(n: Option<Node<'_>>, styles: StyleTable) -> bool {
