@@ -3,6 +3,22 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Fonts: a `font-family` list is followed family by family. Only the first
+  available family of the list reached the text engine, so a character it
+  lacks came from fontconfig's own fallback font and never from the next
+  family the page names. Every available family is now passed on, in the
+  page's order and without repeats, and Pango falls back through them
+  character by character. A missing name's stand-in (the fontconfig
+  alias of Arial, or the default sans-serif for Helvetica, Segoe UI,
+  Roboto and SF Pro) is used only when nothing else in the list is
+  available, so `'Segoe UI', SegoeUI, Arial` reaches the page's own
+  `SegoeUI` web font and `'Roboto Mono', monospace` is drawn in the
+  monospace font. A generic name that stays a fontconfig generic still
+  ends the list. Line metrics and the known line-height factors come from
+  the first family. Installed emoji fonts named in the list are left out,
+  since fontconfig's colour preference would apply to the whole pattern;
+  a page's own web font under such a name is kept. A bare `fangsong` is a
+  family name. Ported from Nordstjernen.
 * Layout: sibling `display: table-cell` boxes stay side by side in one
   anonymous table row when an HTML comment, collapsible white space, a
   `display: none` element or a non-rendering element such as `<script>`

@@ -604,6 +604,13 @@ pub fn font_family_for_pango(family: &CStr) -> CString {
     CString::new(southstar_css::font_family_for_pango(family.to_bytes())).unwrap_or_default()
 }
 
+pub fn font_family_first_for_pango(family: &CStr) -> CString {
+    CString::new(southstar_css::font_family_first_for_pango(
+        family.to_bytes(),
+    ))
+    .unwrap_or_default()
+}
+
 pub fn font_stretch_rank(v: Option<ValueRef<'_>>) -> i32 {
     v.map_or_else(
         || southstar_css::font_stretch_rank(None, None),

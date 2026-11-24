@@ -27,6 +27,10 @@ pub fn font_family_for_pango(family: Option<&CStr>) -> CString {
     southstar_style::font_family_for_pango(family.unwrap_or_default())
 }
 
+pub fn font_family_first_for_pango(family: Option<&CStr>) -> CString {
+    southstar_style::font_family_first_for_pango(family.unwrap_or_default())
+}
+
 pub fn font_weight_number(v: Option<ValueRef<'_>>, fallback: i32) -> i32 {
     v.map_or(fallback, |v| v.font_weight_or(fallback))
 }

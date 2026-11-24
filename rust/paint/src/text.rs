@@ -121,7 +121,7 @@ fn normal_line_height_fallback(family: Option<&CStr>, font_size: f64) -> f64 {
         (b"Menlo", 1.164, true),
         (b"System Font", 1.19, true),
     ];
-    let resolved = family.map(|f| engine::font_family_for_pango(Some(f)));
+    let resolved = family.map(|f| engine::font_family_first_for_pango(Some(f)));
     let mut factor = 1.2;
     let mut rounded = false;
     if let Some(resolved) = &resolved
@@ -596,6 +596,36 @@ pub fn font_available(family: Option<&CStr>) -> bool {
     has || engine::font_family_loaded(family)
 }
 
+fn family_is_emoji(family: &CStr) -> bool {
+    const CACHE_MAX: usize = 1024;
+    thread_local! {
+        static KNOWN: RefCell<HashMap<Vec<u8>, bool>> = RefCell::new(HashMap::new());
+    }
+    let key = family.to_bytes();
+    if let Some(known) = KNOWN.with_borrow(|known| known.get(key).copied()) {
+        return known;
+    }
+    let emoji = family
+        .to_str()
+        .is_ok_and(southstar_text::fontmap::family_prefers_color);
+    KNOWN.with_borrow_mut(|known| {
+        if known.len() >= CACHE_MAX {
+            known.clear();
+        }
+        known.insert(key.to_vec(), emoji);
+    });
+    emoji
+}
+
+pub fn text_family_available(family: Option<&CStr>) -> bool {
+    if !font_available(family) {
+        return false;
+    }
+    family
+        .filter(|f| !f.is_empty())
+        .is_none_or(|family| !family_is_emoji(family) || engine::font_family_loaded(family))
+}
+
 pub fn font_alias(family: &[u8]) -> Option<Vec<u8>> {
     let alias = southstar_font::metric_alias(family)?;
     let name = CString::new(alias.as_slice()).ok()?;
@@ -667,7 +697,8 @@ fn font_metrics_measure(
     }
     fd.set_absolute_size(f64::from(pango_font_size(size_px)));
     l.set_font_description(&fd);
-    font_vertical_metrics(l.context(), &fd, pango_family.as_deref(), out);
+    let first_family = family.map(|f| engine::font_family_first_for_pango(Some(f)));
+    font_vertical_metrics(l.context(), &fd, first_family.as_deref(), out);
     drop(pango_family);
 
     l.set_text(c"x");
