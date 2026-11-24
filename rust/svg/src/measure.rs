@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use southstar_dom::{Node, children};
+use southstar_dom::{FLAG_SVG_NS, Node, children};
 use southstar_glib::boolean;
 use southstar_style::{StyleRef, StyleTable};
 
@@ -248,6 +248,21 @@ impl<'a> Measure<'a> {
         }
     }
 
+    fn target_rendering(&mut self, ctx: &Ctx<'a>, svg: Node<'a>) {
+        let mut cur = Some(self.target);
+        while let Some(n) = cur.filter(|&n| !same(n, svg)) {
+            let hidden = ctx.is_hidden(n);
+            let foreign = n.flags() & FLAG_SVG_NS == 0;
+            if hidden {
+                self.boxless = true;
+            }
+            if hidden || !(foreign || renderable(tag(n))) {
+                self.out.rendered = boolean(false);
+            }
+            cur = n.parent();
+        }
+    }
+
     fn toward_target(
         &mut self,
         ctx: &mut Ctx<'a>,
@@ -274,14 +289,8 @@ impl<'a> Measure<'a> {
         outer: &Frame,
         outer_extent: &mut Extent,
     ) {
-        let never = !renderable(tag(n));
-        let hidden = ctx.is_hidden(n);
-        if never || hidden {
-            if self.inside {
-                return;
-            }
-            self.out.rendered = boolean(false);
-            self.boxless = self.boxless || hidden;
+        if self.inside && (!renderable(tag(n)) || ctx.is_hidden(n)) {
+            return;
         }
         let mut st = parent.clone();
         ctx.apply_node(&mut st, n);
@@ -435,6 +444,7 @@ fn walk<'a>(
     };
     (ctx.vw, ctx.vh) = viewbox_size(svg, width, height);
     let mut st = State::inherited(inherited);
+    m.target_rendering(&ctx, svg);
     ctx.apply_node(&mut st, svg);
     let mut own = Extent::default();
     m.children(&mut ctx, svg, &st, &frame, &mut own);

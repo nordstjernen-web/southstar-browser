@@ -7,9 +7,14 @@ Southstar Browser 1.0.12-dev:
   `animateMotion`, `mpath`, `discard`, `view` and unknown elements, besides
   `defs`, `symbol`, gradients and the like) report an empty
   `getBoundingClientRect()` and no `getClientRects()`, instead of a 0x0 rect
-  at the parent's origin, and take no part in geometry. Icons with hundreds
-  of animation elements no longer report that many empty rects. Ported from
-  Nordstjernen.
+  at the parent's origin, and take no part in geometry. So do elements that
+  are hidden or never rendered inside `<text>` (an `animate` or `set` child,
+  a `tspan` with `display:none` or a non-matching `systemLanguage`), which
+  used to report the whole text box. The check covers every ancestor of the
+  element up to the outermost `<svg>`, skipping ancestors outside the SVG
+  namespace, so SVG inside HTML inside `<foreignObject>` keeps its client
+  rects. Icons with hundreds of animation elements no longer report that many
+  empty rects. Ported from Nordstjernen.
 * Security: clicking a box that is the root of a 3D-transformed subtree
   with its own background or border no longer overflows the renderer's
   stack. The 3D hit test picked the box's own quad, hit-tested the box,
