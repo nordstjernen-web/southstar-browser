@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Layout: a row flex item's percentage padding and margin resolve against
+  the flex container's content width instead of the item's own width, so
+  `padding-left: 5%` in a 1000px row is 50px, not 5px; the same holds for
+  wrapping rows and nested flex containers. Images, SVG, video and
+  form controls used as flex items follow the same rule. A table with a
+  set width that is a flex item now takes the width the flex layout
+  gives it, within its `max-width` and `min-width`, instead of
+  resolving its `width` percentage a second time. Ported from Nordstjernen.
 * SVG elements that never render (`animate`, `set`, `animateTransform`,
   `animateMotion`, `mpath`, `discard`, `view` and unknown elements, besides
   `defs`, `symbol`, gradients and the like) report an empty

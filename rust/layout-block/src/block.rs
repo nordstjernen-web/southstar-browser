@@ -8,8 +8,9 @@ use core::sync::atomic::{AtomicI32, Ordering};
 use southstar_layout::BoxRef;
 use southstar_layout_float::{box_establishes_bfc, style_is_grid_container};
 use southstar_layout_geom::{
-    edges_into_box, flex_direction_of, height_keyword_stretches, is_atomic_inline_container,
-    keyword_or, length_resolve, style_is_absolute_or_fixed, style_is_flex_container,
+    edges_into_box, flex_direction_of, flex_row_item_basis, height_keyword_stretches,
+    is_atomic_inline_container, keyword_or, length_resolve, style_is_absolute_or_fixed,
+    style_is_flex_container,
 };
 use southstar_style::{
     CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_FIT_CONTENT, CALC_SIZE_MAX_CONTENT,
@@ -345,7 +346,7 @@ fn layout_orthogonal(
 
 pub fn layout_block(b: BoxRef<'_>, pcw: f64, inherited: Option<StyleRef<'_>>) {
     inline_runs_join_splits(b);
-    edges_into_box(b, pcw);
+    edges_into_box(b, flex_row_item_basis(b, pcw));
     b.set_margin_top_through(0.0);
     let (p, bd) = (b.padding(), b.border());
     let vert_extras = p.top + p.bottom + bd.top + bd.bottom;

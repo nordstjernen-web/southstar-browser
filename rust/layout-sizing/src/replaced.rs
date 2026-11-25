@@ -9,9 +9,9 @@ use southstar_layout_build::node_has_media_metadata;
 use southstar_layout_float::{float_side_of, style_is_grid_container};
 use southstar_layout_geom::{
     aspect_ratio_number, containing_block_definite_height, edges_from_style, edges_into_box,
-    flex_direction_of, height_keyword_stretches, is_atomic_inline, is_length_or_calc,
-    length_resolve, resolve_height_with_basis, resolve_used_height, style_is_absolute_or_fixed,
-    style_is_flex_container, value_is_percent,
+    flex_direction_of, flex_row_item_basis, height_keyword_stretches, is_atomic_inline,
+    is_length_or_calc, length_resolve, resolve_height_with_basis, resolve_used_height,
+    style_is_absolute_or_fixed, style_is_flex_container, value_is_percent,
 };
 use southstar_style::{PropId, StyleRef, ValueRef, display_of};
 
@@ -38,7 +38,7 @@ fn flex_row_direction(dir: &[u8]) -> bool {
 }
 
 pub fn layout_image(b: BoxRef<'_>, parent_content_width: f64) {
-    edges_into_box(b, parent_content_width);
+    edges_into_box(b, flex_row_item_basis(b, parent_content_width));
     let wv = style_value(b, PropId::Width);
     let hv = style_value(b, PropId::Height);
     let mxw = style_value(b, PropId::MaxWidth);

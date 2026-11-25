@@ -5,7 +5,7 @@
 
 use southstar_layout::BoxRef;
 use southstar_layout_geom::{
-    edges_into_box, keyword_or, resolve_used_height, style_is_flex_container,
+    flex_row_item_edges, keyword_or, resolve_used_height, style_is_flex_container,
 };
 use southstar_style::PropId;
 
@@ -76,7 +76,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame) -> f64 {
     let mut lines: Vec<Line> = Vec::new();
 
     for it in list.iter_mut() {
-        edges_into_box(it.b, cw);
+        flex_row_item_edges(it.b, cw);
         it.extra = outer_main_extras(it.b);
         it.len = row_len(it.b, cw, child_inherited);
     }
