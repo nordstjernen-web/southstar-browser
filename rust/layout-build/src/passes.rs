@@ -99,6 +99,14 @@ fn is_table_run_gap(n: Node<'_>, st: StyleTable) -> bool {
     classify::node_is_table_run_gap(n, st)
 }
 
+fn node_is_out_of_flow(n: Node<'_>, st: StyleTable) -> bool {
+    classify::node_is_out_of_flow(Some(n), st)
+}
+
+fn inline_range_waits_for_next(start: Node<'_>, end: Option<Node<'_>>, st: StyleTable) -> bool {
+    classify::inline_range_waits_for_next(start, end, st)
+}
+
 fn peek_image(src: &CStr) -> Option<southstar_layout::MediaHandle> {
     media::peek_image(Some(src))
 }
@@ -120,6 +128,8 @@ pub fn install_builders() {
             is_inline_dom,
             continues_inline_run,
             is_table_run_gap,
+            node_is_out_of_flow,
+            inline_range_waits_for_next,
         });
         southstar_layout_content::install_image_peek(peek_image);
     });
