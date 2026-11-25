@@ -207,6 +207,9 @@ impl<'a> Measure<'a> {
             attr_length(n, c"y", ctx.vh, fs, 0.0),
         );
         let mut content = Extent::default();
+        let mut inst = st.clone();
+        inst.instanced = true;
+        let st = &inst;
         ctx.depth += 1;
         if name_is(referenced, b"symbol") {
             let w = attr_length(n, c"width", ctx.vw, fs, ctx.vw);

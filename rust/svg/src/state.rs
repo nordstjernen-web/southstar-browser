@@ -174,6 +174,7 @@ pub struct State {
     pub hidden: bool,
     pub stroke_first: bool,
     pub non_scaling_stroke: bool,
+    pub instanced: bool,
 }
 
 impl Default for State {
@@ -202,6 +203,7 @@ impl Default for State {
             hidden: false,
             stroke_first: false,
             non_scaling_stroke: false,
+            instanced: false,
         }
     }
 }
@@ -369,8 +371,8 @@ impl<'a> Ctx<'a> {
         self.styles.get(n)
     }
 
-    pub fn node_style(&self, n: Node<'a>) -> Option<NodeStyle<'a>> {
-        self.style(n).map(|s| NodeStyle::new(s, self.use_depth > 0))
+    pub fn node_style(&self, n: Node<'a>, instanced: bool) -> Option<NodeStyle<'a>> {
+        self.style(n).map(|s| NodeStyle::new(s, instanced))
     }
 
     pub fn prop(&self, n: Node<'a>, name: &CStr) -> Option<Cow<'a, CStr>> {
@@ -504,7 +506,7 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn apply_node(&self, st: &mut State, n: Node<'a>) {
-        let s = self.node_style(n);
+        let s = self.node_style(n, st.instanced);
         let basis = diag_basis(self.vw, self.vh);
         let inherited_font_size = st.font_size;
 

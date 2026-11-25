@@ -57,7 +57,11 @@ impl RawStyle {
 
     pub fn replace_value(&mut self, prop: usize, value: Option<OwnedValue>) -> Option<OwnedValue> {
         let slot = self.values.get_mut(prop)?;
-        core::mem::replace(slot, value)
+        let old = core::mem::replace(slot, value);
+        if let Some(bit) = Prop::from_id(prop).and_then(crate::inherited_bit) {
+            self.inherited_bits &= !(1 << bit);
+        }
+        old
     }
 
     pub fn display_parts(&self) -> [u8; 5] {

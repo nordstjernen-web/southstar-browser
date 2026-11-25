@@ -19,7 +19,12 @@ Southstar Browser 1.0.12-dev:
   parent set another one, lost to the original parent. A `color`
   attribute on a `<use>` is still ignored, as it is on any element whose
   style has a colour, and a `var()` in a presentation attribute is not
-  covered. Ported from Nordstjernen.
+  covered. The flag marking a copy travels with the drawing state, so a
+  marker or mask used inside a `<use>` copy keeps the values its children
+  inherit from the marker or mask, an animation or transition that writes
+  a property's value clears that property's mark, and `getBBox()` measures
+  a `<use>` copy with the `<use>`'s font size and family. Ported from
+  Nordstjernen.
 * Layout: an absolutely positioned box inside a scrolling element
   (`overflow: auto` or `scroll`) now counts toward how far that element
   can scroll when the element or a box between it and the positioned box
