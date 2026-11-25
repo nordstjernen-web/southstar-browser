@@ -56,7 +56,9 @@ pub(crate) use element_state::{
 };
 pub(crate) use font::relative_unit_px as font_relative_px;
 pub use font::{FontMetrics, FontOracle, set_font_alias, set_font_oracle};
-pub(crate) use font::{font_alias, font_available, font_generation, font_oracle_serial};
+pub(crate) use font::{
+    font_alias, font_available, font_family_text_name, font_generation, font_oracle_serial,
+};
 pub use gather::{selector_cache_begin, selector_cache_end};
 pub(crate) use host_scope::scoped as scoped_css;
 pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};

@@ -131,7 +131,8 @@ pub fn pango_font_size(size_px: f64) -> i32 {
 
 pub fn register_font_oracle() {
     southstar_css::set_font_oracle(southstar_css::FontOracle {
-        available: text::font_available,
+        available: text::text_family_available,
+        family_name: text::text_family_name,
         generation: text::font_generation,
         metrics: text::font_metrics,
     });

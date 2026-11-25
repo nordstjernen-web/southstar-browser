@@ -112,6 +112,7 @@ pub use ffi::{
     values_equal,
 };
 pub use font::{
+    family_first_for_pango as font_family_first_for_pango,
     family_for_pango as font_family_for_pango, shorthand_canonical as font_shorthand_canonical,
     stretch_rank as font_stretch_rank, weight_number as font_weight_number,
 };

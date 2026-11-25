@@ -11,6 +11,7 @@ use std::sync::{Mutex, PoisonError};
 use crate::font;
 
 pub type AvailableFn = fn(family: Option<&CStr>) -> bool;
+pub type FamilyNameFn = fn(family: &[u8]) -> Vec<u8>;
 pub type GenerationFn = fn() -> u64;
 pub type AliasFn = fn(family: &[u8]) -> Option<Vec<u8>>;
 pub type MetricsFn =
@@ -29,11 +30,13 @@ pub struct FontMetrics {
 
 pub struct FontOracle {
     pub available: AvailableFn,
+    pub family_name: FamilyNameFn,
     pub generation: GenerationFn,
     pub metrics: MetricsFn,
 }
 
 static AVAILABLE: Mutex<Option<AvailableFn>> = Mutex::new(None);
+static FAMILY_NAME: Mutex<Option<FamilyNameFn>> = Mutex::new(None);
 static GENERATION: Mutex<Option<GenerationFn>> = Mutex::new(None);
 static METRICS: Mutex<Option<MetricsFn>> = Mutex::new(None);
 static ALIAS: Mutex<Option<AliasFn>> = Mutex::new(None);
@@ -51,6 +54,10 @@ pub(crate) fn font_available(family: &[u8]) -> Option<bool> {
     let cb = load(&AVAILABLE)?;
     let family = CString::new(family).unwrap_or_default();
     Some(cb(Some(&family)))
+}
+
+pub(crate) fn font_family_text_name(family: &[u8]) -> Vec<u8> {
+    load(&FAMILY_NAME).map_or_else(|| family.to_vec(), |cb| cb(family))
 }
 
 pub(crate) fn font_alias(family: &[u8]) -> Option<Vec<u8>> {
@@ -72,6 +79,8 @@ pub(crate) fn font_oracle_serial() -> u32 {
 
 pub fn set_font_oracle(oracle: FontOracle) {
     store(&AVAILABLE, Some(oracle.available));
+    ORACLE_SERIAL.fetch_add(1, Ordering::Relaxed);
+    store(&FAMILY_NAME, Some(oracle.family_name));
     ORACLE_SERIAL.fetch_add(1, Ordering::Relaxed);
     store(&GENERATION, Some(oracle.generation));
     ORACLE_SERIAL.fetch_add(1, Ordering::Relaxed);

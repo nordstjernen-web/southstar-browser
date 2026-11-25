@@ -262,7 +262,8 @@ pub fn build_inline_run(
     let first_child_of_parent = first
         .zip(parent)
         .is_some_and(|(f, p)| p.first_child().is_some_and(|fc| fc == f));
-    if let Some(p) = parent.filter(|p| p.is_element() && first_child_of_parent)
+    let opens_parent = first.is_some_and(|f| crate::classify::inline_run_opens_parent(f, styles));
+    if let Some(p) = parent.filter(|p| p.is_element() && opens_parent)
         && let Some(marker) = ffi::li_marker(p, parent_style)
     {
         c.push(&marker);

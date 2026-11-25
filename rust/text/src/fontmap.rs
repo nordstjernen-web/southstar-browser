@@ -438,6 +438,14 @@ fn filter_by_format(sets: [Option<FontSet>; 2]) -> FontSet {
     result
 }
 
+pub fn family_prefers_color(family: &str) -> bool {
+    fontconfig::init();
+    let mut pattern = PatternBuilder::new();
+    pattern.add_string(FC_FAMILY, family);
+    pattern.config_substitute();
+    pattern.finish().get_bool(FC_COLOR, 0) == Some(true)
+}
+
 fn is_alias_family(name: &str) -> bool {
     match name.as_bytes().first() {
         Some(b'c' | b'C') => name.eq_ignore_ascii_case("cursive"),

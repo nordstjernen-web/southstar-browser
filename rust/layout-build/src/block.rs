@@ -700,7 +700,7 @@ fn build_container(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -> 
             c = end;
             continue;
         }
-        if is_inline_dom(Some(cur), styles) {
+        if continues_inline_run(Some(cur), styles) {
             let start = cur;
             c = cur.next_sibling();
             while let Some(nx) = c {
@@ -723,13 +723,18 @@ fn build_container(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -> 
                 }
                 c = nx.next_sibling();
             }
+            if crate::classify::inline_range_waits_for_next(start, c, styles) {
+                continue;
+            }
             let mut run = inline_run(start, c, styles);
             if let Some(p) = pending.take() {
                 run = ffi::inline_merge_prefix(p, run);
             }
             append_or_free(block, run);
         } else {
-            if let Some(p) = pending.take() {
+            if !crate::classify::node_is_out_of_flow(Some(cur), styles)
+                && let Some(p) = pending.take()
+            {
                 append_child(block, p);
             }
             append_some(block, build_block(Some(cur), styles));

@@ -25,6 +25,41 @@ Southstar Browser 1.0.12-dev:
   a property's value clears that property's mark, and `getBBox()` measures
   a `<use>` copy with the `<use>`'s font size and family. Ported from
   Nordstjernen.
+* Fonts: a `font-family` list is followed family by family. Only the first
+  available family of the list reached the text engine, so a character it
+  lacks came from fontconfig's own fallback font and never from the next
+  family the page names. Every available family is now passed on, in the
+  page's order and without repeats, and Pango falls back through them
+  character by character. A missing name that fontconfig aliases to a
+  metric-compatible font (Arial, Courier New and Times New Roman to the
+  Liberation fonts) is used at the place the page names it, so
+  `'Courier New', monospace` is drawn in Liberation Mono. The built-in
+  stand-in for other missing names (the default sans-serif for Helvetica,
+  Segoe UI, Roboto and SF Pro) is used only when nothing else in the list
+  is available, so `'Segoe UI', SegoeUI, Arial` reaches the page's own
+  `SegoeUI` web font and `'Roboto Mono', monospace` is drawn in the
+  monospace font. A generic name that stays a fontconfig generic still
+  ends the list. Line metrics and the known line-height factors come from
+  the first family. Installed emoji fonts named in the list are left out,
+  since fontconfig's colour preference would apply to the whole pattern.
+  A page's own `@font-face` font under such a name (Noto Color Emoji, say)
+  is installed a second time under a private family name that takes its
+  place in the list, so digits and letters in it are drawn in that font
+  and not in the system emoji font. A bare `fangsong` is a family name.
+  Ported from Nordstjernen.
+* Layout: an HTML comment, a `display: none` element, a float or an
+  absolutely positioned element at the start of a block or table cell no
+  longer pushes the text after it onto a new line. The node used to end the
+  inline content opened by the element's `::before`, so
+  `<div class="tag"><!-- x -->text</div>` with `.tag::before { content: "#" }`
+  drew the `#` and the text on two lines; they now share one line. A float
+  or absolutely positioned element no longer flushes the pending `::before`
+  either, and an inside list marker is drawn before the first rendered
+  content when only comments, collapsible white space, non-rendering
+  elements, floats or absolutely positioned elements precede it, where a
+  leading float or `display: none` element used to drop it. Not covered: a
+  float after the last text of a box with `::after`, and a `display: contents`
+  first child, still start a new line. Ported from Nordstjernen.
 * Layout: an absolutely positioned box inside a scrolling element
   (`overflow: auto` or `scroll`) now counts toward how far that element
   can scroll when the element or a box between it and the positioned box
