@@ -260,24 +260,31 @@ fn system_language_allows(n: Node<'_>) -> bool {
         .any(|t| language_preferred(g_strip(t), &preferred))
 }
 
-fn never_rendered(tag: &[u8]) -> bool {
-    const TAGS: [&[u8]; 14] = [
-        b"defs",
-        b"symbol",
-        b"title",
-        b"desc",
-        b"metadata",
-        b"style",
-        b"script",
-        b"clipPath",
-        b"mask",
-        b"marker",
-        b"pattern",
-        b"filter",
-        b"linearGradient",
-        b"radialGradient",
+fn renderable(tag: &[u8]) -> bool {
+    const TAGS: [&[u8]; 17] = [
+        b"a",
+        b"circle",
+        b"ellipse",
+        b"foreignObject",
+        b"g",
+        b"image",
+        b"line",
+        b"path",
+        b"polygon",
+        b"polyline",
+        b"rect",
+        b"svg",
+        b"switch",
+        b"text",
+        b"textPath",
+        b"tspan",
+        b"use",
     ];
-    TAGS.contains(&tag)
+    let local = tag
+        .iter()
+        .position(|&c| c == b':')
+        .map_or(tag, |colon| &tag[colon + 1..]);
+    TAGS.contains(&local)
 }
 
 fn switch_choice(n: Node<'_>) -> Option<Node<'_>> {
@@ -1303,7 +1310,7 @@ impl<'a> Ctx<'a> {
 
     fn render_node_nested(&mut self, n: Node<'a>, parent: &State) {
         let tag = tag(n);
-        if never_rendered(tag) || self.is_hidden(n) {
+        if !renderable(tag) || self.is_hidden(n) {
             return;
         }
         let mut st = parent.clone();

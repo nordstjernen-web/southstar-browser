@@ -5,7 +5,7 @@
 
 use southstar_layout::{BoxRef, Edges};
 use southstar_layout_geom::{
-    edges_into_box, keyword_or, resolve_used_height, style_is_absolute_or_fixed,
+    flex_row_item_edges, keyword_or, resolve_used_height, style_is_absolute_or_fixed,
 };
 use southstar_style::PropId;
 
@@ -99,7 +99,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
     let gap = flex_gap_of(style_of(b), cw);
     let mut total_extras = 0.0;
     for it in list.iter_mut() {
-        edges_into_box(it.b, cw);
+        flex_row_item_edges(it.b, cw);
         total_extras += outer_main_extras(it.b);
         it.len = row_len(it.b, cw, child_inherited);
     }
