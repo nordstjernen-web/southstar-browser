@@ -25,6 +25,40 @@ Southstar Browser 1.0.12-dev:
   place in the list, so digits and letters in it are drawn in that font
   and not in the system emoji font. A bare `fangsong` is a family name.
   Ported from Nordstjernen.
+* Layout: an absolutely positioned box inside a scrolling element
+  (`overflow: auto` or `scroll`) now counts toward how far that element
+  can scroll when the element or a box between it and the positioned box
+  is the containing block, including the box's own descendants and boxes
+  inside inline-blocks. Before, `scrollWidth` reported the overflow but
+  `scrollLeft` stayed at 0, so a 410px-wide positioned bar in a 200px
+  scroller could not be scrolled; it now scrolls up to 210px, rounded to
+  whole pixels. Transformed boxes and everything inside them, fixed
+  boxes, zero-size boxes, `content-visibility` subtrees and subtrees
+  clipped by an inner `overflow` are not counted. In right-to-left and
+  reversed (`row-reverse`, `column-reverse`, `wrap-reverse`) scrollers
+  the flipped axis gets no range and boxes lying past its start edge are
+  ignored on the other axis; the page's own `html`/`body` scroller is
+  untouched. Ported from Nordstjernen.
+* Layout: a row flex item's percentage padding and margin resolve against
+  the flex container's content width instead of the item's own width, so
+  `padding-left: 5%` in a 1000px row is 50px, not 5px; the same holds for
+  wrapping rows and nested flex containers. Images, SVG, video and
+  form controls used as flex items follow the same rule. A table with a
+  set width that is a flex item now takes the width the flex layout
+  gives it, within its `max-width` and `min-width`, instead of
+  resolving its `width` percentage a second time. Ported from Nordstjernen.
+* SVG elements that never render (`animate`, `set`, `animateTransform`,
+  `animateMotion`, `mpath`, `discard`, `view` and unknown elements, besides
+  `defs`, `symbol`, gradients and the like) report an empty
+  `getBoundingClientRect()` and no `getClientRects()`, instead of a 0x0 rect
+  at the parent's origin, and take no part in geometry. So do elements that
+  are hidden or never rendered inside `<text>` (an `animate` or `set` child,
+  a `tspan` with `display:none` or a non-matching `systemLanguage`), which
+  used to report the whole text box. The check covers every ancestor of the
+  element up to the outermost `<svg>`, skipping ancestors outside the SVG
+  namespace, so SVG inside HTML inside `<foreignObject>` keeps its client
+  rects. Icons with hundreds of animation elements no longer report that many
+  empty rects. Ported from Nordstjernen.
 * Layout: sibling `display: table-cell` boxes stay side by side in one
   anonymous table row when an HTML comment, collapsible white space, a
   `display: none` element or a non-rendering element such as `<script>`

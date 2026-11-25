@@ -517,6 +517,25 @@ pub fn edges_into_box(b: BoxRef<'_>, basis: f64) {
     b.set_border(border);
 }
 
+pub fn flex_row_item_basis(b: BoxRef<'_>, fallback: f64) -> f64 {
+    let Some(basis) = b.cb_width() else {
+        return fallback;
+    };
+    let in_flex_row = b.parent().is_some_and(|p| {
+        style_is_flex_container(box_style(p))
+            && matches!(
+                flex_direction_of(box_style(p)).to_bytes(),
+                b"row" | b"row-reverse"
+            )
+    });
+    if in_flex_row { basis } else { fallback }
+}
+
+pub fn flex_row_item_edges(b: BoxRef<'_>, basis: f64) {
+    edges_into_box(b, basis);
+    b.set_cb_width(Some(basis));
+}
+
 pub fn outer_width(c: BoxRef<'_>) -> f64 {
     let (m, p, b) = (c.margin(), c.padding(), c.border());
     c.content_width() + p.left + p.right + b.left + b.right + m.left + m.right

@@ -12,7 +12,7 @@ use southstar_layout_content::{counters_build, counters_clear};
 use southstar_style::StyleTable;
 
 use crate::block::build_block;
-use crate::{ffi, passes, state};
+use crate::{ffi, passes, scroll_range, state};
 
 fn build_once(
     doc: Option<Node<'_>>,
@@ -36,6 +36,7 @@ fn build_once(
         passes::apply_position_offsets(root, viewport_width, root.content_height());
         passes::process_absolute_boxes(root, styles, viewport_width);
         ffi::sync_inline_atomic_offsets(root);
+        scroll_range::extend_scroll_ranges_from_abs(root);
         ffi::compute_paint_bounds(root);
     }
     state::with(|st| {
