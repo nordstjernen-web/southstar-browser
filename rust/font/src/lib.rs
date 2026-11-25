@@ -5,7 +5,7 @@
 
 mod ffi;
 
-use core::ffi::c_int;
+use core::ffi::{CStr, c_int};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -359,6 +359,35 @@ fn mark_loaded(key: &[u8]) {
     state.generation = state.generation.wrapping_add(1);
 }
 
+const PRIVATE_FAMILY_PREFIX: &[u8] = b"Southstar face ";
+
+fn private_family(family: &[u8]) -> Vec<u8> {
+    [PRIVATE_FAMILY_PREFIX, family].concat()
+}
+
+pub fn family_for_text(family: &[u8], prefers_color: bool) -> Vec<u8> {
+    if prefers_color && family_loaded(family) {
+        private_family(family)
+    } else {
+        family.to_vec()
+    }
+}
+
+fn install_under(path: &CStr, data: &[u8], family: &[u8], descriptors: Descriptors) {
+    let indexed = path.to_str().is_ok_and(|path| {
+        southstar_text::install_web_font(
+            path,
+            data,
+            &String::from_utf8_lossy(family),
+            descriptors.weight,
+            descriptors.slant,
+        )
+    });
+    if !indexed {
+        ffi::install_font_file(path, family, descriptors);
+    }
+}
+
 fn install(keys: &[Vec<u8>], data: &[u8], forced_extension: Option<&[u8]>) {
     for key in keys {
         let Some((family, url, descriptors, cache_dir)) = entry_target(key) else {
@@ -369,20 +398,11 @@ fn install(keys: &[Vec<u8>], data: &[u8], forced_extension: Option<&[u8]>) {
             continue;
         };
         if ffi::write_file(&path, data) {
-            let indexed = path.to_str().is_ok_and(|path| {
-                southstar_text::install_web_font(
-                    path,
-                    data,
-                    &String::from_utf8_lossy(&family),
-                    descriptors.weight,
-                    descriptors.slant,
-                )
-            });
-            if indexed {
-                ffi::refresh_fonts();
-            } else {
-                ffi::install_font_file(&path, &family, descriptors);
+            install_under(&path, data, &family, descriptors);
+            if southstar_text::fontmap::family_prefers_color(&String::from_utf8_lossy(&family)) {
+                install_under(&path, data, &private_family(&family), descriptors);
             }
+            ffi::refresh_fonts();
             mark_loaded(key);
         }
     }

@@ -79,7 +79,7 @@ fn map_generic(token: &[u8]) -> Option<Vec<u8>> {
         b"ui-serif" | b"serif" if cfg!(windows) => b"Times New Roman",
         b"ui-serif" | b"serif" => b"serif",
         b"ui-monospace" | b"monospace" => b"monospace",
-        b"cursive" | b"fantasy" | b"emoji" | b"math" | b"fangsong" => &lo,
+        b"cursive" | b"fantasy" | b"emoji" | b"math" => &lo,
         _ => return None,
     };
     Some(mapped.to_vec())
@@ -142,66 +142,107 @@ fn platform_has_system_font() -> bool {
     platform_family_for_generic(b"system-ui") != platform_family_for_generic(b"sans-serif")
 }
 
+fn family_token_end(css_family: &[u8], mut p: usize) -> usize {
+    let mut quote = 0u8;
+    while p < css_family.len() {
+        let c = css_family[p];
+        if quote != 0 {
+            if c == b'\\' && p + 1 < css_family.len() {
+                p += 1;
+            } else if c == quote {
+                quote = 0;
+            }
+        } else if c == b'"' || c == b'\'' {
+            quote = c;
+        } else if c == b',' {
+            break;
+        }
+        p += 1;
+    }
+    p
+}
+
+fn token_is_skipped(lo: &[u8]) -> bool {
+    matches!(
+        lo,
+        b"inherit" | b"initial" | b"unset" | b"revert" | b"revert-layer" | b"emoji"
+    ) || lo.windows(15).any(|w| w == b"linux libertine")
+        || lo.starts_with(b"libertinus")
+        || lo.starts_with(b"var(")
+}
+
+fn token_is_system_alias(lo: &[u8]) -> bool {
+    lo == b"-apple-system" || lo == b"blinkmacsystemfont"
+}
+
+fn resolve_token(token: &[u8], stand_in: &mut Option<Vec<u8>>, ends: &mut bool) -> Option<Vec<u8>> {
+    let lo = token.to_ascii_lowercase();
+    let system_alias = token_is_system_alias(&lo);
+    if token_is_skipped(&lo) || (system_alias && !platform_has_system_font()) {
+        return None;
+    }
+    let generic = if system_alias {
+        Some(b"system-ui".to_vec())
+    } else {
+        map_generic(token)
+    };
+    if let Some(generic) = generic {
+        let family = platform_family_for_generic(&generic);
+        *ends = map_generic(&family).is_some();
+        return Some(family);
+    }
+    if ffi::font_available(token) != Some(false) {
+        return Some(ffi::font_family_text_name(token));
+    }
+    if let Some(alias) = ffi::font_alias(token) {
+        return Some(alias);
+    }
+    if stand_in.is_none() {
+        *stand_in = substitute(token).map(platform_family_for_generic);
+    }
+    None
+}
+
+fn list_add(list: &mut Vec<u8>, family: &[u8]) {
+    if list
+        .split(|&c| c == b',')
+        .any(|have| have.eq_ignore_ascii_case(family))
+    {
+        return;
+    }
+    if !list.is_empty() {
+        list.push(b',');
+    }
+    list.extend_from_slice(family);
+}
+
 fn family_resolve(css_family: &[u8]) -> Vec<u8> {
-    let mut fallback: Option<&'static [u8]> = None;
+    let mut list = Vec::new();
+    let mut stand_in = None;
+    let mut ends = false;
     let end = css_family.len();
     let mut p = 0;
-    while p < end {
+    while p < end && !ends {
         while p < end && css_family[p] == b',' {
             p += 1;
         }
-        let start = p;
-        let mut quote = 0u8;
-        while p < end {
-            let c = css_family[p];
-            if quote != 0 {
-                if c == b'\\' && p + 1 < end {
-                    p += 1;
-                } else if c == quote {
-                    quote = 0;
-                }
-            } else if c == b'"' || c == b'\'' {
-                quote = c;
-            } else if c == b',' {
-                break;
-            }
-            p += 1;
+        let token_end = family_token_end(css_family, p);
+        let token = token_clean(&css_family[p..token_end]);
+        if !token.is_empty()
+            && let Some(family) = resolve_token(&token, &mut stand_in, &mut ends)
+        {
+            list_add(&mut list, &family);
         }
-        let token = token_clean(&css_family[start..p]);
-        if !token.is_empty() {
-            let lo = token.to_ascii_lowercase();
-            let skip = matches!(
-                lo.as_slice(),
-                b"inherit" | b"initial" | b"unset" | b"revert" | b"revert-layer"
-            ) || lo.windows(15).any(|w| w == b"linux libertine")
-                || lo.starts_with(b"libertinus")
-                || lo.starts_with(b"var(");
-            let system_alias = lo == b"-apple-system" || lo == b"blinkmacsystemfont";
-            if system_alias && platform_has_system_font() {
-                return b"system-ui".to_vec();
-            } else if system_alias {
-                fallback.get_or_insert(b"sans-serif");
-            } else if !skip {
-                if let Some(mapped) = map_generic(&token) {
-                    return mapped;
-                }
-                if ffi::font_available(&token) != Some(false) {
-                    return token;
-                }
-                if let Some(alias) = ffi::font_alias(&token) {
-                    return alias;
-                }
-                if let Some(substitute) = substitute(&token) {
-                    return substitute.to_vec();
-                }
-                fallback.get_or_insert(b"sans-serif");
-            }
-        }
-        if p < end && css_family[p] == b',' {
-            p += 1;
-        }
+        p = if token_end < end {
+            token_end + 1
+        } else {
+            token_end
+        };
     }
-    fallback.unwrap_or(b"sans-serif").to_vec()
+    if list.is_empty() {
+        list = stand_in.unwrap_or_else(|| platform_family_for_generic(b"sans-serif"));
+    }
+    list
 }
 
 pub fn family_for_pango(css_family: &[u8]) -> Vec<u8> {
@@ -221,11 +262,19 @@ pub fn family_for_pango(css_family: &[u8]) -> Vec<u8> {
     if let Some(hit) = hit {
         return hit;
     }
-    let resolved = platform_family_for_generic(&family_resolve(css_family));
+    let resolved = family_resolve(css_family);
     PANGO_MEMO.with_borrow_mut(|memo| {
         memo.map.insert(css_family.to_vec(), resolved.clone());
     });
     resolved
+}
+
+pub fn family_first_for_pango(css_family: &[u8]) -> Vec<u8> {
+    let mut families = family_for_pango(css_family);
+    if let Some(comma) = families.iter().position(|&c| c == b',') {
+        families.truncate(comma);
+    }
+    families
 }
 
 pub(crate) fn weight_relative(parent: i32, bolder: bool) -> i32 {
