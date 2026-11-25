@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use southstar_dom::{Node, children};
+use southstar_dom::{FLAG_SVG_NS, Node, children};
 use southstar_glib::boolean;
 use southstar_style::{StyleRef, StyleTable};
 
@@ -13,7 +13,7 @@ use crate::ffi::{Canvas, FORMAT_A8, Matrix, Segment, Surface, SvgGeometry};
 use crate::state::{State, max, min};
 use crate::{
     Ctx, HEIGHT, MAX_DEPTH, MAX_NESTING, MAX_NODES, SVG_X, SVG_Y, WIDTH, attr_length, is_element,
-    name_is, never_rendered, switch_choice, tag, viewbox_matrix, viewbox_size,
+    name_is, renderable, switch_choice, tag, viewbox_matrix, viewbox_size,
 };
 
 #[derive(Default, Clone, Copy)]
@@ -241,10 +241,25 @@ impl<'a> Measure<'a> {
             b"use" => self.use_element(ctx, n, st, frame, own),
             b"text" | b"tspan" => self.text(ctx, n, st, own),
             b"rect" | b"image" | b"foreignObject" => self.positioned_box(ctx, n, st, own),
-            _ if matches!(t, b"g" | b"a" | b"svg") || never_rendered(t) => {
+            _ if matches!(t, b"g" | b"a" | b"svg") || !renderable(t) => {
                 self.children(ctx, n, st, frame, own)
             }
             _ => self.shape(ctx, n, st, own),
+        }
+    }
+
+    fn target_rendering(&mut self, ctx: &Ctx<'a>, svg: Node<'a>) {
+        let mut cur = Some(self.target);
+        while let Some(n) = cur.filter(|&n| !same(n, svg)) {
+            let hidden = ctx.is_hidden(n);
+            let foreign = n.flags() & FLAG_SVG_NS == 0;
+            if hidden {
+                self.boxless = true;
+            }
+            if hidden || !(foreign || renderable(tag(n))) {
+                self.out.rendered = boolean(false);
+            }
+            cur = n.parent();
         }
     }
 
@@ -274,14 +289,8 @@ impl<'a> Measure<'a> {
         outer: &Frame,
         outer_extent: &mut Extent,
     ) {
-        let never = never_rendered(tag(n));
-        let hidden = ctx.is_hidden(n);
-        if never || hidden {
-            if self.inside {
-                return;
-            }
-            self.out.rendered = boolean(false);
-            self.boxless = self.boxless || hidden;
+        if self.inside && (!renderable(tag(n)) || ctx.is_hidden(n)) {
+            return;
         }
         let mut st = parent.clone();
         ctx.apply_node(&mut st, n);
@@ -435,6 +444,7 @@ fn walk<'a>(
     };
     (ctx.vw, ctx.vh) = viewbox_size(svg, width, height);
     let mut st = State::inherited(inherited);
+    m.target_rendering(&ctx, svg);
     ctx.apply_node(&mut st, svg);
     let mut own = Extent::default();
     m.children(&mut ctx, svg, &st, &frame, &mut own);

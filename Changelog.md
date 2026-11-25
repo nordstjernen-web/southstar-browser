@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* SVG elements that never render (`animate`, `set`, `animateTransform`,
+  `animateMotion`, `mpath`, `discard`, `view` and unknown elements, besides
+  `defs`, `symbol`, gradients and the like) report an empty
+  `getBoundingClientRect()` and no `getClientRects()`, instead of a 0x0 rect
+  at the parent's origin, and take no part in geometry. So do elements that
+  are hidden or never rendered inside `<text>` (an `animate` or `set` child,
+  a `tspan` with `display:none` or a non-matching `systemLanguage`), which
+  used to report the whole text box. The check covers every ancestor of the
+  element up to the outermost `<svg>`, skipping ancestors outside the SVG
+  namespace, so SVG inside HTML inside `<foreignObject>` keeps its client
+  rects. Icons with hundreds of animation elements no longer report that many
+  empty rects. Ported from Nordstjernen.
 * Layout: sibling `display: table-cell` boxes stay side by side in one
   anonymous table row when an HTML comment, collapsible white space, a
   `display: none` element or a non-rendering element such as `<script>`
