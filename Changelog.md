@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* Layout: an HTML comment, a `display: none` element, a float or an
+  absolutely positioned element at the start of a block or table cell no
+  longer pushes the text after it onto a new line. The node used to end the
+  inline content opened by the element's `::before`, so
+  `<div class="tag"><!-- x -->text</div>` with `.tag::before { content: "#" }`
+  drew the `#` and the text on two lines; they now share one line. A float
+  or absolutely positioned element no longer flushes the pending `::before`
+  either, and an inside list marker is drawn before the first rendered
+  content when only comments, collapsible white space, non-rendering
+  elements, floats or absolutely positioned elements precede it, where a
+  leading float or `display: none` element used to drop it. Not covered: a
+  float after the last text of a box with `::after`, and a `display: contents`
+  first child, still start a new line. Ported from Nordstjernen.
 * Layout: a row flex item's percentage padding and margin resolve against
   the flex container's content width instead of the item's own width, so
   `padding-left: 5%` in a 1000px row is 50px, not 5px; the same holds for
