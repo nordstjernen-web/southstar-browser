@@ -192,11 +192,13 @@ fn resolve_token(token: &[u8], stand_in: &mut Option<Vec<u8>>, ends: &mut bool) 
         return Some(family);
     }
     if ffi::font_available(token) != Some(false) {
-        return Some(token.to_vec());
+        return Some(ffi::font_family_text_name(token));
+    }
+    if let Some(alias) = ffi::font_alias(token) {
+        return Some(alias);
     }
     if stand_in.is_none() {
-        *stand_in =
-            ffi::font_alias(token).or_else(|| substitute(token).map(platform_family_for_generic));
+        *stand_in = substitute(token).map(platform_family_for_generic);
     }
     None
 }

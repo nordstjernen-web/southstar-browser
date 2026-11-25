@@ -626,6 +626,13 @@ pub fn text_family_available(family: Option<&CStr>) -> bool {
         .is_none_or(|family| !family_is_emoji(family) || engine::font_family_loaded(family))
 }
 
+pub fn text_family_name(family: &[u8]) -> Vec<u8> {
+    let prefers_color = CString::new(family)
+        .ok()
+        .is_some_and(|family| family_is_emoji(&family));
+    southstar_font::family_for_text(family, prefers_color)
+}
+
 pub fn font_alias(family: &[u8]) -> Option<Vec<u8>> {
     let alias = southstar_font::metric_alias(family)?;
     let name = CString::new(alias.as_slice()).ok()?;
