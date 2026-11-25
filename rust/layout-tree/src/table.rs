@@ -11,8 +11,9 @@ use southstar_style::{Display, StyleRef, display_of};
 use crate::ffi::{
     Styles, append_display_contents_children, append_generated_after, append_node_children,
     build_block, build_inline_run, build_pseudo_block_for, build_pseudo_inline_for,
-    collect_box_bg_image, continues_inline_run, is_inline_dom, is_table_run_gap, parse_int,
-    queue_absolute_node, register_abs_pseudo, tag_is_non_rendering,
+    collect_box_bg_image, continues_inline_run, inline_range_waits_for_next, is_inline_dom,
+    is_table_run_gap, node_is_out_of_flow, parse_int, queue_absolute_node, register_abs_pseudo,
+    tag_is_non_rendering,
 };
 use crate::runs::{append_child, merge_prefix};
 
@@ -256,9 +257,15 @@ fn has_text(b: BoxRef<'_>) -> bool {
 
 fn cell_append_run<'a>(
     cell: BoxRef<'a>,
-    run: Option<BoxRef<'a>>,
+    start: Node<'_>,
+    end: Option<Node<'_>>,
+    styles: Styles,
     pending_before: &mut Option<BoxRef<'a>>,
 ) {
+    if inline_range_waits_for_next(start, end, styles) {
+        return;
+    }
+    let run = build_inline_run(start, end, styles);
     let run = match pending_before.take() {
         Some(pending) => merge_prefix(Some(pending), run),
         None => run,
@@ -273,9 +280,17 @@ fn cell_append_run<'a>(
     }
 }
 
-fn cell_flush_pending<'a>(cell: BoxRef<'a>, pending_before: &mut Option<BoxRef<'a>>) {
+fn flush_pending_before<'a>(
+    parent: BoxRef<'a>,
+    pending_before: &mut Option<BoxRef<'a>>,
+    next: Option<Node<'_>>,
+    styles: Styles,
+) {
+    if next.is_some_and(|n| node_is_out_of_flow(n, styles)) {
+        return;
+    }
     if let Some(pending) = pending_before.take() {
-        append_child(cell, pending);
+        append_child(parent, pending);
     }
 }
 
@@ -299,25 +314,21 @@ fn build_cell<'a>(n: Node<'_>, styles: Styles) -> BoxRef<'a> {
     let mut pending_before = cell_pseudo_before(cell, n, s);
     let mut c = n.first_child();
     while let Some(cur) = c {
-        if is_inline_dom(cur, styles) {
+        if continues_inline_run(cur, styles) {
             let start = cur;
             while let Some(x) = c.filter(|&x| continues_inline_run(x, styles)) {
                 c = x.next_sibling();
             }
-            cell_append_run(
-                cell,
-                build_inline_run(start, c, styles),
-                &mut pending_before,
-            );
+            cell_append_run(cell, start, c, styles, &mut pending_before);
         } else {
-            cell_flush_pending(cell, &mut pending_before);
+            flush_pending_before(cell, &mut pending_before, Some(cur), styles);
             if let Some(child) = build_block(cur, styles) {
                 append_child(cell, child);
             }
             c = cur.next_sibling();
         }
     }
-    cell_flush_pending(cell, &mut pending_before);
+    flush_pending_before(cell, &mut pending_before, None, styles);
     cell_pseudo_after(cell, n, s);
     cell
 }

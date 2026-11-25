@@ -25,6 +25,8 @@ pub struct Builders {
     pub is_inline_dom: fn(Node<'_>, Styles) -> bool,
     pub continues_inline_run: fn(Node<'_>, Styles) -> bool,
     pub is_table_run_gap: fn(Node<'_>, Styles) -> bool,
+    pub node_is_out_of_flow: fn(Node<'_>, Styles) -> bool,
+    pub inline_range_waits_for_next: fn(Node<'_>, Option<Node<'_>>, Styles) -> bool,
 }
 
 static BUILDERS: OnceLock<Builders> = OnceLock::new();
@@ -97,6 +99,14 @@ pub fn continues_inline_run(n: Node<'_>, styles: Styles) -> bool {
 
 pub fn is_table_run_gap(n: Node<'_>, styles: Styles) -> bool {
     (builders().is_table_run_gap)(n, styles)
+}
+
+pub fn node_is_out_of_flow(n: Node<'_>, styles: Styles) -> bool {
+    (builders().node_is_out_of_flow)(n, styles)
+}
+
+pub fn inline_range_waits_for_next(start: Node<'_>, end: Option<Node<'_>>, styles: Styles) -> bool {
+    (builders().inline_range_waits_for_next)(start, end, styles)
 }
 
 pub fn parse_int(s: Option<&CStr>, dflt: i32, min_v: i32, max_v: i32) -> i32 {

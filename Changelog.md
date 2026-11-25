@@ -25,6 +25,19 @@ Southstar Browser 1.0.12-dev:
   place in the list, so digits and letters in it are drawn in that font
   and not in the system emoji font. A bare `fangsong` is a family name.
   Ported from Nordstjernen.
+* Layout: an HTML comment, a `display: none` element, a float or an
+  absolutely positioned element at the start of a block or table cell no
+  longer pushes the text after it onto a new line. The node used to end the
+  inline content opened by the element's `::before`, so
+  `<div class="tag"><!-- x -->text</div>` with `.tag::before { content: "#" }`
+  drew the `#` and the text on two lines; they now share one line. A float
+  or absolutely positioned element no longer flushes the pending `::before`
+  either, and an inside list marker is drawn before the first rendered
+  content when only comments, collapsible white space, non-rendering
+  elements, floats or absolutely positioned elements precede it, where a
+  leading float or `display: none` element used to drop it. Not covered: a
+  float after the last text of a box with `::after`, and a `display: contents`
+  first child, still start a new line. Ported from Nordstjernen.
 * Layout: an absolutely positioned box inside a scrolling element
   (`overflow: auto` or `scroll`) now counts toward how far that element
   can scroll when the element or a box between it and the positioned box

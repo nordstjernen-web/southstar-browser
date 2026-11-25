@@ -10,7 +10,7 @@ use southstar_layout_content::tags;
 use southstar_layout_geom::{
     INNER_FLEX, INNER_GRID, OUTER_INLINE, inner_is, is_atomic_inline, is_atomic_inline_container,
     is_table_internal, style_is_absolute_or_fixed, style_is_block, style_is_block_level,
-    style_is_flex_container, style_is_grid_container, style_is_none,
+    style_is_contents, style_is_flex_container, style_is_grid_container, style_is_none,
 };
 use southstar_style::{StyleTable, display_of};
 
@@ -223,6 +223,45 @@ pub fn node_is_table_run_gap(n: Node<'_>, styles: StyleTable) -> bool {
         return true;
     }
     node_leaves_inline_run_open(n, styles)
+}
+
+pub fn node_is_out_of_flow(n: Option<Node<'_>>, styles: StyleTable) -> bool {
+    let Some(n) = n.filter(|n| n.is_element()) else {
+        return false;
+    };
+    let s = styles.get(n);
+    s.is_some()
+        && !style_is_none(s)
+        && (ffi::float_side_of(s) >= 0 || style_is_absolute_or_fixed(s))
+}
+
+pub fn inline_range_waits_for_next(
+    start: Node<'_>,
+    end: Option<Node<'_>>,
+    styles: StyleTable,
+) -> bool {
+    if !node_is_out_of_flow(end, styles) && !end.is_some_and(|e| style_is_contents(styles.get(e))) {
+        return false;
+    }
+    let mut n = Some(start);
+    while let Some(cur) = n.filter(|cur| Some(*cur) != end) {
+        if !node_is_table_run_gap(cur, styles) {
+            return false;
+        }
+        n = cur.next_sibling();
+    }
+    true
+}
+
+pub fn inline_run_opens_parent(first: Node<'_>, styles: StyleTable) -> bool {
+    let mut p = first.prev_sibling();
+    while let Some(sib) = p {
+        if !node_is_out_of_flow(Some(sib), styles) && !node_is_table_run_gap(sib, styles) {
+            return false;
+        }
+        p = sib.prev_sibling();
+    }
+    true
 }
 
 pub fn continues_inline_run(n: Option<Node<'_>>, styles: StyleTable) -> bool {
