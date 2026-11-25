@@ -412,6 +412,17 @@ impl<'a> StyleRef<'a> {
             .is_some_and(|bit| (self.data().currentcolor_bits() >> bit) & 1 != 0)
     }
 
+    pub fn inherited(self, prop: PropId) -> bool {
+        southstar_css::inherited_bit(prop)
+            .is_some_and(|bit| (self.data().inherited_bits() >> bit) & 1 != 0)
+    }
+
+    pub fn inherited_prop(self, prop: &Prop) -> bool {
+        prop.id()
+            .and_then(PropId::from_id)
+            .is_some_and(|id| self.inherited(id))
+    }
+
     pub fn vars_ptr(self) -> *const c_void {
         self.data().vars_ptr()
     }

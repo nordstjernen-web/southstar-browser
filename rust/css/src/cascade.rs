@@ -34,6 +34,36 @@ pub(crate) const CURRENTCOLOR_PROPS: [Prop; 19] = [
     Prop::WebkitTapHighlightColor,
 ];
 
+pub(crate) const INHERITED_TRACKED_PROPS: [Prop; 20] = [
+    Prop::Color,
+    Prop::Fill,
+    Prop::Stroke,
+    Prop::FillOpacity,
+    Prop::StrokeOpacity,
+    Prop::StrokeWidth,
+    Prop::StrokeMiterlimit,
+    Prop::StrokeDashoffset,
+    Prop::StrokeDasharray,
+    Prop::StrokeLinecap,
+    Prop::StrokeLinejoin,
+    Prop::FillRule,
+    Prop::ClipRule,
+    Prop::TextAnchor,
+    Prop::PaintOrder,
+    Prop::Visibility,
+    Prop::FontSize,
+    Prop::FontWeight,
+    Prop::FontStyle,
+    Prop::FontFamily,
+];
+
+pub fn inherited_bit(prop: Prop) -> Option<u32> {
+    INHERITED_TRACKED_PROPS
+        .iter()
+        .position(|p| *p == prop)
+        .and_then(|i| u32::try_from(i).ok())
+}
+
 pub fn currentcolor_bit(prop: Prop) -> Option<u32> {
     CURRENTCOLOR_PROPS
         .iter()

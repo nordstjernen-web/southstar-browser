@@ -3,6 +3,23 @@ Changelog:
 
 Southstar Browser 1.0.12-dev:
 ======
+* SVG: content drawn through `<use>` now takes the inherited painting and
+  text properties (`color`, `fill`, `stroke`, their opacity, width, dash,
+  cap, join and miter properties, `fill-rule`, `clip-rule`, `text-anchor`,
+  `paint-order`, `visibility`, `font-size`, `font-weight`, `font-style`
+  and `font-family`) from the `<use>` element when the referenced element
+  only inherited them from its original parent, whether through
+  inheritance, `inherit`, `unset` or `color: currentcolor`. The cascade
+  records which of those values came from the parent, in a mask kept by
+  style sharing and style copies, and an instance drops exactly those. A
+  value the referenced element declares itself, including `initial`,
+  `!important` and `var()`, still wins, even when an ancestor matched the
+  same rule. Before, a font size, a font family or a `color` set on the
+  `<use>` by `style` or a stylesheet, and a `fill` set on an element whose
+  parent set another one, lost to the original parent. A `color`
+  attribute on a `<use>` is still ignored, as it is on any element whose
+  style has a colour, and a `var()` in a presentation attribute is not
+  covered. Ported from Nordstjernen.
 * Layout: an absolutely positioned box inside a scrolling element
   (`overflow: auto` or `scroll`) now counts toward how far that element
   can scroll when the element or a box between it and the positioned box

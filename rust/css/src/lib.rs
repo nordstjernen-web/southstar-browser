@@ -83,7 +83,7 @@ pub use calc_size::{
     BASIS_MIN_CONTENT as CALC_SIZE_MIN_CONTENT, BASIS_PERCENT as CALC_SIZE_PERCENT,
     BASIS_STRETCH as CALC_SIZE_STRETCH, FN_CALC_SIZE,
 };
-pub use cascade::currentcolor_bit;
+pub use cascade::{currentcolor_bit, inherited_bit};
 pub use color::{parse_color, scheme_is_dark};
 pub use container::condition_canonical as container_condition_canonical;
 pub use container::{

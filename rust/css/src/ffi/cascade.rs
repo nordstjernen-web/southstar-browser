@@ -91,6 +91,12 @@ impl Out<'_> {
     fn replace(&mut self, prop: usize, v: Option<OwnedValue>) {
         self.style.values[prop] = v;
     }
+
+    fn note_inherited(&mut self, prop: usize) {
+        if let Some(bit) = Prop::from_id(prop).and_then(cascade::inherited_bit) {
+            self.style.inherited_bits |= 1 << bit;
+        }
+    }
 }
 
 fn parent_value(parent: Option<&RawStyle>, prop: usize) -> Option<OwnedValue> {
@@ -150,6 +156,7 @@ fn resolve_wide_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
         match keyword(out.style.value_at(prop)) {
             Some(b"inherit") => {
                 note_explicit_inherit(prop);
+                out.note_inherited(prop);
                 out.replace(prop, parent_value(parent, prop));
             }
             Some(b"initial") => {
@@ -174,6 +181,7 @@ fn resolve_wide_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
         if out.style.values[prop].is_none() && !initial && inherits && parent.values[prop].is_some()
         {
             out.style.values[prop].clone_from(&parent.values[prop]);
+            out.note_inherited(prop);
         }
     }
 }
@@ -208,6 +216,9 @@ fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
                 None => initial_value_of(Prop::Color.id()),
             };
             out.replace(Prop::Color.id(), color);
+            if parent.is_some() {
+                out.note_inherited(Prop::Color.id());
+            }
         }
         Some(kw) => {
             let inherited = parent.and_then(|p| p.value_at(Prop::Color.id()));

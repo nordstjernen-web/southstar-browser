@@ -27,6 +27,7 @@ pub struct RawStyle {
     pub(super) pseudo_styles: [Option<RetainedStyle>; 12],
     pub(super) share_id: u64,
     pub(super) currentcolor_bits: u32,
+    pub(super) inherited_bits: u32,
     pub(super) vars: Option<Rc<VarMap>>,
     pub(super) zoom: f64,
 }
@@ -40,6 +41,7 @@ impl RawStyle {
             pseudo_styles: [const { None }; 12],
             share_id: 0,
             currentcolor_bits: 0,
+            inherited_bits: 0,
             vars: None,
             zoom: 1.0,
         }
@@ -76,6 +78,10 @@ impl RawStyle {
 
     pub fn currentcolor_bits(&self) -> u32 {
         self.currentcolor_bits
+    }
+
+    pub fn inherited_bits(&self) -> u32 {
+        self.inherited_bits
     }
 
     pub fn has_vars(&self) -> bool {
