@@ -22,7 +22,9 @@ Southstar Browser 1.0.12-dev:
   covered. The flag marking a copy travels with the drawing state, so a
   marker or mask used inside a `<use>` copy keeps the values its children
   inherit from the marker or mask, an animation or transition that writes
-  a property's value clears that property's mark, and `getBBox()` measures
+  a property's value clears that property's mark on the animated element
+  only (descendants that inherit the animated value keep theirs, so the
+  `<use>` element's value still reaches them), and `getBBox()` measures
   a `<use>` copy with the `<use>`'s font size and family. Ported from
   Nordstjernen.
 * Fonts: a `font-family` list is followed family by family. Only the first
