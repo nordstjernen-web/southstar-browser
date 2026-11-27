@@ -230,7 +230,7 @@ const SOUTHSTAR_TAIL: &str = concat!(
     "<a class=\"btn\" href=\"about:gpl\">GNU GPL v3</a>",
     "<a class=\"btn\" href=\"about:third-party\">{{Third-party notices}}</a>",
     "</div></section>",
-    "<details class=\"card\"><summary><h2>{{Technical details}}</h2></summary>",
+    "<details class=\"card\" open><summary><h2>{{Technical details}}</h2></summary>",
     "__ND_DIAG__</details>",
     "<footer class=\"foot\"><span>Southstar Browser \u{a9} 2026 ",
     "Andreas R\u{f8}sdal</span></footer>",
