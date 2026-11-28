@@ -385,8 +385,9 @@ Southstar Browser 1.0.11:
   an element matching `X` is now the selector's anchor, and adding,
   removing or re-keying such a child restyles that parent.
 * Dependencies updated to their newest compatible releases, among them
-  rustls-webpki 0.103.17, rustls-pki-types 1.16.0, wasmi 2.0.2,
-  harfrust 0.16.1 and brotli-decompressor 6.3.2. ICU4X stays at 2.3:
+  rustls-webpki 0.103.17, rustls-pki-types 1.16.0, wasmi 2.0.3,
+  harfrust 0.16.2, brotli-decompressor 6.4.0, zlib-rs 0.6.9 and
+  postcard 1.2.0. ICU4X stays at 2.3:
   boa_icu_provider 0.22, its newest release, requires ICU ~2.3.
 
 Southstar Browser 1.0.10:
