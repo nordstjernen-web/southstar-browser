@@ -100,6 +100,7 @@ fn style_copy(source: &RawStyle) -> NewStyle {
     copy.pseudo_styles.clone_from(&source.pseudo_styles);
     copy.share_id = source.share_id;
     copy.currentcolor_bits = source.currentcolor_bits;
+    copy.inherited_bits = source.inherited_bits;
     copy.vars.clone_from(&source.vars);
     copy.zoom = source.zoom;
     copy
@@ -109,6 +110,8 @@ pub(super) fn style_clone_shared(source: &RawStyle) -> NewStyle {
     let mut clone = style_alloc();
     clone.share_id = source.share_id;
     clone.display = source.display;
+    clone.currentcolor_bits = source.currentcolor_bits;
+    clone.inherited_bits = source.inherited_bits;
     for (slot, value) in clone.values.iter_mut().zip(&source.values) {
         slot.clone_from(value);
     }

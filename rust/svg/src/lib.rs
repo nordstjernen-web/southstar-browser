@@ -68,7 +68,6 @@ pub struct Ctx<'a> {
     styles: StyleTable<'a>,
     ids: Option<HashMap<&'a [u8], Node<'a>>>,
     depth: i32,
-    use_depth: i32,
     nesting: i32,
     nodes: i32,
     masks: Vec<Node<'a>>,
@@ -443,7 +442,6 @@ impl<'a> Ctx<'a> {
             styles,
             ids: None,
             depth: 0,
-            use_depth: 0,
             nesting: 0,
             nodes: 0,
             masks: Vec::new(),
@@ -980,6 +978,7 @@ impl<'a> Ctx<'a> {
             let saved = core::mem::replace(&mut self.cr, mcr);
             self.depth += 1;
             let mut ms = st.clone();
+            ms.instanced = false;
             ms.fill.set_color([1.0; 4]);
             for c in children(mask) {
                 if is_element(c) {
@@ -1271,7 +1270,9 @@ impl<'a> Ctx<'a> {
         cr.translate(x, y);
         let outer_owner = self.hit_enter_use(n);
         self.depth += 1;
-        self.use_depth += 1;
+        let mut inst = st.clone();
+        inst.instanced = true;
+        let st = &inst;
         if t.name_is_tag(southstar_dom::Tag::Symbol) {
             let w = attr_length(n, c"width", self.vw, fs, self.vw);
             let h = attr_length(n, c"height", self.vh, fs, self.vh);
@@ -1283,7 +1284,6 @@ impl<'a> Ctx<'a> {
         } else {
             self.render_node(t, st);
         }
-        self.use_depth -= 1;
         self.depth -= 1;
         self.hit_leave_use(outer_owner);
     }

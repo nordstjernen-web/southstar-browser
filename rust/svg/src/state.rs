@@ -10,7 +10,7 @@ use core::ffi::CStr;
 
 use southstar_dom::Node;
 pub use southstar_glib::{clamp, max, min};
-use southstar_style::{Prop, PropId, StyleRef, UNIT_PERCENT, Value, parse_color};
+use southstar_style::{Prop, PropId, StyleRef, UNIT_PERCENT, Value, ValueRef, parse_color};
 
 use crate::Ctx;
 use crate::ffi::{
@@ -174,6 +174,7 @@ pub struct State {
     pub hidden: bool,
     pub stroke_first: bool,
     pub non_scaling_stroke: bool,
+    pub instanced: bool,
 }
 
 impl Default for State {
@@ -202,6 +203,7 @@ impl Default for State {
             hidden: false,
             stroke_first: false,
             non_scaling_stroke: false,
+            instanced: false,
         }
     }
 }
@@ -312,6 +314,47 @@ fn style_decl(n: Node<'_>, prop: &CStr) -> Option<CString> {
     CString::new(&style[val..end]).ok()
 }
 
+#[derive(Clone, Copy)]
+pub struct NodeStyle<'a> {
+    style: StyleRef<'a>,
+    instanced: bool,
+}
+
+impl<'a> NodeStyle<'a> {
+    pub fn new(style: StyleRef<'a>, instanced: bool) -> NodeStyle<'a> {
+        NodeStyle { style, instanced }
+    }
+
+    fn dropped(self, prop: &Prop) -> bool {
+        self.instanced && self.style.inherited_prop(prop)
+    }
+
+    pub fn value(self, prop: &Prop) -> Option<ValueRef<'a>> {
+        if self.dropped(prop) {
+            return None;
+        }
+        self.style.value(prop)
+    }
+
+    pub fn keyword(self, prop: &Prop) -> Option<&'a CStr> {
+        if self.dropped(prop) {
+            return None;
+        }
+        self.style.keyword(prop)
+    }
+
+    fn paint_is_currentcolor(self, id: PropId) -> bool {
+        self.style.from_currentcolor(id)
+    }
+
+    fn number(self, prop: &Prop, basis: f64, fallback: f64) -> f64 {
+        if self.dropped(prop) {
+            return fallback;
+        }
+        css_number(self.style, prop, basis, fallback)
+    }
+}
+
 pub fn css_number(s: StyleRef<'_>, prop: &Prop, basis: f64, fallback: f64) -> f64 {
     let Some(v) = s.value(prop) else {
         return fallback;
@@ -326,6 +369,10 @@ pub fn css_number(s: StyleRef<'_>, prop: &Prop, basis: f64, fallback: f64) -> f6
 impl<'a> Ctx<'a> {
     pub fn style(&self, n: Node<'a>) -> Option<StyleRef<'a>> {
         self.styles.get(n)
+    }
+
+    pub fn node_style(&self, n: Node<'a>, instanced: bool) -> Option<NodeStyle<'a>> {
+        self.style(n).map(|s| NodeStyle::new(s, instanced))
     }
 
     pub fn prop(&self, n: Node<'a>, name: &CStr) -> Option<Cow<'a, CStr>> {
@@ -359,18 +406,6 @@ impl<'a> Ctx<'a> {
             .ok()
             .map(Cow::Owned)
             .or(Some(v))
-    }
-
-    fn color_inherited_outside_instance(&self, n: Node<'a>, color: [u8; 4]) -> bool {
-        if self.use_depth == 0 {
-            return false;
-        }
-        let parent_color = n
-            .parent()
-            .and_then(|p| self.style(p))
-            .and_then(|ps| ps.value(&COLOR))
-            .map(|v| v.get());
-        matches!(parent_color, Some(Value::Color(pc)) if pc == color)
     }
 
     fn apply_color_attr(&self, st: &mut State, n: Node<'a>) {
@@ -471,16 +506,12 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn apply_node(&self, st: &mut State, n: Node<'a>) {
-        let s = self.style(n);
+        let s = self.node_style(n, st.instanced);
         let basis = diag_basis(self.vw, self.vh);
         let inherited_font_size = st.font_size;
 
         match s.and_then(|s| s.value(&COLOR)).map(|v| v.get()) {
-            Some(Value::Color(c)) => {
-                if !self.color_inherited_outside_instance(n, c) {
-                    st.color = unit_rgba(c);
-                }
-            }
+            Some(Value::Color(c)) => st.color = unit_rgba(c),
             _ => self.apply_color_attr(st, n),
         }
 
@@ -491,19 +522,19 @@ impl<'a> Ctx<'a> {
         apply_css_paint(st, s, &FILL, true);
         apply_css_paint(st, s, &STROKE, false);
         if s.value(&FILL_OPACITY).is_some() {
-            st.fill_opacity = clamp(css_number(s, &FILL_OPACITY, 1.0, 1.0), 0.0, 1.0);
+            st.fill_opacity = clamp(s.number(&FILL_OPACITY, 1.0, 1.0), 0.0, 1.0);
         }
         if s.value(&STROKE_OPACITY).is_some() {
-            st.stroke_opacity = clamp(css_number(s, &STROKE_OPACITY, 1.0, 1.0), 0.0, 1.0);
+            st.stroke_opacity = clamp(s.number(&STROKE_OPACITY, 1.0, 1.0), 0.0, 1.0);
         }
         if s.value(&STROKE_WIDTH).is_some() {
-            st.stroke_width = max(0.0, css_number(s, &STROKE_WIDTH, basis, 1.0));
+            st.stroke_width = max(0.0, s.number(&STROKE_WIDTH, basis, 1.0));
         }
         if s.value(&STROKE_MITERLIMIT).is_some() {
-            st.miter_limit = max(1.0, css_number(s, &STROKE_MITERLIMIT, 1.0, 4.0));
+            st.miter_limit = max(1.0, s.number(&STROKE_MITERLIMIT, 1.0, 4.0));
         }
         if s.value(&STROKE_DASHOFFSET).is_some() {
-            st.dash_offset = css_number(s, &STROKE_DASHOFFSET, basis, 0.0);
+            st.dash_offset = s.number(&STROKE_DASHOFFSET, basis, 0.0);
         }
         if let Some(kw) = s.keyword(&STROKE_LINECAP) {
             st.line_cap = cap_of(kw.to_bytes());
@@ -535,7 +566,7 @@ impl<'a> Ctx<'a> {
         if s.value(&FONT_SIZE).is_some() {
             let css_font_size = max(
                 0.0,
-                css_number(s, &FONT_SIZE, inherited_font_size, inherited_font_size),
+                s.number(&FONT_SIZE, inherited_font_size, inherited_font_size),
             );
             if !font_size_from_attr || (css_font_size - inherited_font_size).abs() > 1e-6 {
                 st.font_size = css_font_size;
@@ -554,13 +585,13 @@ impl<'a> Ctx<'a> {
     }
 }
 
-fn apply_css_paint(st: &mut State, s: StyleRef<'_>, prop: &Prop, fill: bool) {
+fn apply_css_paint(st: &mut State, s: NodeStyle<'_>, prop: &Prop, fill: bool) {
     let Some(v) = s.value(prop) else {
         return;
     };
     let color = st.color;
     let id = if fill { PropId::Fill } else { PropId::Stroke };
-    let from_currentcolor = s.from_currentcolor(id);
+    let from_currentcolor = s.paint_is_currentcolor(id);
     let out = if fill { &mut st.fill } else { &mut st.stroke };
     match v.get() {
         Value::Color(_) if from_currentcolor => out.set_color(color),

@@ -352,9 +352,12 @@ impl<'a> StylesMut<'a> {
 
     pub fn replace(&mut self, node: NodePtr, prop: i32, value: Val) -> Option<Val> {
         let index = usize::try_from(prop).ok()?;
-        self.modify(node, |style| style.replace_value(index, Some(value.0)))
-            .flatten()
-            .map(Val)
+        self.modify(node, |style| {
+            style.clear_inherited_mark(index);
+            style.replace_value(index, Some(value.0))
+        })
+        .flatten()
+        .map(Val)
     }
 
     pub fn set_retained(&mut self, node: NodePtr, prop: i32, value: &Val) {

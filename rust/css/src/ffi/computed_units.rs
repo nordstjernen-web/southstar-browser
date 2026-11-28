@@ -27,6 +27,7 @@ pub struct RawStyle {
     pub(super) pseudo_styles: [Option<RetainedStyle>; 12],
     pub(super) share_id: u64,
     pub(super) currentcolor_bits: u32,
+    pub(super) inherited_bits: u32,
     pub(super) vars: Option<Rc<VarMap>>,
     pub(super) zoom: f64,
 }
@@ -40,6 +41,7 @@ impl RawStyle {
             pseudo_styles: [const { None }; 12],
             share_id: 0,
             currentcolor_bits: 0,
+            inherited_bits: 0,
             vars: None,
             zoom: 1.0,
         }
@@ -56,6 +58,12 @@ impl RawStyle {
     pub fn replace_value(&mut self, prop: usize, value: Option<OwnedValue>) -> Option<OwnedValue> {
         let slot = self.values.get_mut(prop)?;
         core::mem::replace(slot, value)
+    }
+
+    pub fn clear_inherited_mark(&mut self, prop: usize) {
+        if let Some(bit) = Prop::from_id(prop).and_then(crate::inherited_bit) {
+            self.inherited_bits &= !(1 << bit);
+        }
     }
 
     pub fn display_parts(&self) -> [u8; 5] {
@@ -76,6 +84,10 @@ impl RawStyle {
 
     pub fn currentcolor_bits(&self) -> u32 {
         self.currentcolor_bits
+    }
+
+    pub fn inherited_bits(&self) -> u32 {
+        self.inherited_bits
     }
 
     pub fn has_vars(&self) -> bool {
